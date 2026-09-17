@@ -1,0 +1,62 @@
+{
+  "app": {
+    "name": "StoryCanvas Backend",
+    "port": 8080,
+    "threads": 4,
+    "document_root": "./static",
+    "home_page": "index.html"
+  },
+  "listeners": [
+    {
+      "address": "0.0.0.0",
+      "port": 8080
+    }
+  ],
+  "database": {
+    "type": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "database": "storycanvas",
+    "username": "storycanvas",
+    "password": "storycanvas20061104",
+    "min_connections": 5,
+    "max_connections": 20
+  },
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "password": "",
+    "database": 0
+  },
+  "jwt": {
+    "secret": "24bd313c8ccbc4675f862cdfb5a3b547a12486c9346d38bea88b43f52b5fa3d2",
+    "access_token_expiry": 3600,
+    "refresh_token_expiry": 604800
+  },
+  "ai_service": {
+    "url": "http://localhost:8000",
+    "api_key": "00604362172915683414063d5ebf6f9e",
+    "timeout": 60
+  },
+  "storage": {
+    "type": "local",
+    "local_path": "./storage",
+    "max_upload_size": 10485760
+  },
+  "log": {
+    "loggers": [
+      {
+        "name": "basic",
+        "type": "console",
+        "level": "debug"
+      },
+      {
+        "name": "file",
+        "type": "file",
+        "level": "info",
+        "path": "./logs",
+        "filename_pattern": "%Y-%m-%d.log"
+      }
+    ]
+  }
+}
