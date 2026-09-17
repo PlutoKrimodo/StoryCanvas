@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  # ==================== 数据库服务 ====================
+  postgres:
+    image: postgres:15-alpine
+    container_name: storycanvas-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-storycanvas}
+      POSTGRES_USER: ${DB_USER:-storycanvas}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-storycanvas}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - storycanvas-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: storycanvas-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - storycanvas-network
+
+  # ==================== 后端服务 ====================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: storycanvas-backend
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-storycanvas}
+      - DB_USER=${DB_USER:-storycanvas}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-secret}
+      - AI_SERVICE_URL=http://ai-service:8000
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-apikey}
+      - STORAGE_PATH=/app/storage
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - storycanvas-network
+
+  # ==================== AI Service ====================
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: storycanvas-ai-service
+    ports:
+      - "${AI_SERVICE_PORT:-8000}:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.openai.com/v1}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
+      - STABILITY_API_KEY=${STABILITY_API_KEY}
+      - STABILITY_API_HOST=${STABILITY_API_HOST:-https://api.stability.ai}
+      - STORAGE_PATH=/app/storage
+      - INTERNAL_API_KEY=${AI_SERVICE_API_KEY:-apikey}
+    volumes:
+      - ./storage:/app/storage
+    networks:
+      - storycanvas-network
+
+  # ==================== 前端服务 ====================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: storycanvas-frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      - backend
+    networks:
+      - storycanvas-network
+
+  # ==================== Nginx 反向代理（可选）====================
+  nginx:
+    image: nginx:alpine
+    container_name: storycanvas-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - storycanvas-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  storycanvas-network:
+    driver: bridge

@@ -1,0 +1,121 @@
+# ==================== 通用 ====================
+# 操作系统文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 编辑器配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ==================== C++ 后端 ====================
+# 编译产物
+backend/build/
+backend/out/
+*.o
+*.obj
+*.exe
+*.out
+*.app
+*.a
+*.so
+*.dylib
+
+# CMake 产物
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# ==================== Python AI Service ====================
+# 虚拟环境
+ai-service/venv/
+ai-service/.venv/
+ai-service/env/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# ==================== 前端 ====================
+# 依赖
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.js
+
+# 构建产物
+frontend/dist/
+frontend/build/
+frontend/.cache/
+
+# 测试覆盖率
+frontend/coverage/
+
+# ==================== 环境配置 ====================
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# ==================== 文件存储 ====================
+# 用户上传文件
+storage/users/*
+!storage/users/.gitkeep
+
+# 临时文件
+storage/temp/*
+!storage/temp/.gitkeep
+
+# 导出文件
+storage/exports/*
+!storage/exports/.gitkeep
+
+# ==================== 日志 ====================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==================== Docker ====================
+docker-compose.override.yml
+
+# ==================== 其他 ====================
+*.bak
+*.tmp
+*.temp
+.cache/
+tmp/
+temp/
