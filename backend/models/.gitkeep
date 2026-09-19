@@ -1,0 +1,2 @@
+# 数据模型层：实体定义与序列化
+# 由 M1（用户系统）开始填充，如 User.h / Book.h / GenerationTask.h

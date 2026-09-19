@@ -1,0 +1,2 @@
+# 业务逻辑层：承载业务规则、事务与外部服务编排
+# 由 M1（用户系统）开始填充，如 UserService / AuthService / GenerationService

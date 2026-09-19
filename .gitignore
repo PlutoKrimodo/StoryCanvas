@@ -119,3 +119,14 @@ docker-compose.override.yml
 .cache/
 tmp/
 temp/
+
+# ==================== 安全：密钥与证书一律不入库 ====================
+*.pem
+*.key
+*.crt
+nginx/ssl/*
+!nginx/ssl/.gitkeep
+
+# ==================== 系统回收站 ====================
+.Trash-0/
+.Trash-1000/

@@ -1,12 +1,19 @@
--- StoryCanvas 数据库初始化脚本
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- ============================================================
+-- StoryCanvas 数据库初始化脚本（v2.0）
+--
+-- 范围：用户管理子系统 + 智能图像生成子系统
+-- 说明：
+--   - 在线编辑子系统已放弃，page_elements 表与 canvas_data 字段不再创建
+--   - gen_random_uuid() 为 PostgreSQL 13+ 内置函数，无需 uuid-ossp 扩展
+--   - 密码仅存 bcrypt / PBKDF2 单向哈希，禁止明文
+-- ============================================================
 
--- 用户表
+-- ==================== 用户表 ====================
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
+    -- 单向哈希：bcrypt（$2a$/$2b$，约 60 字符）或 pbkdf2_sha256（约 100 字符）
     password_hash VARCHAR(255) NOT NULL,
     avatar VARCHAR(500),
     is_active BOOLEAN DEFAULT true,
@@ -16,7 +23,9 @@ CREATE TABLE users (
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_username ON users(username);
 
--- 绘本表
+COMMENT ON COLUMN users.password_hash IS '密码单向哈希（bcrypt 或 pbkdf2_sha256），禁止明文/可逆加密';
+
+-- ==================== 绘本表 ====================
 CREATE TABLE books (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -30,13 +39,14 @@ CREATE TABLE books (
 CREATE INDEX idx_books_user_id ON books(user_id);
 CREATE INDEX idx_books_status ON books(status);
 
--- 绘本页面表
+-- ==================== 页容器表 ====================
+-- 降级为「页容器」：仅记录页码、标题与缩略图，用于承载生成的图片
+-- 原 canvas_data（Fabric.js 画布状态）随在线编辑子系统一并移除
 CREATE TABLE book_pages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     book_id UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     page_number INTEGER NOT NULL,
     title VARCHAR(200),
-    canvas_data JSONB DEFAULT '{}',
     thumbnail VARCHAR(500),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -44,27 +54,7 @@ CREATE TABLE book_pages (
 );
 CREATE INDEX idx_book_pages_book_id ON book_pages(book_id);
 
--- 页面元素表
-CREATE TABLE page_elements (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    page_id UUID NOT NULL REFERENCES book_pages(id) ON DELETE CASCADE,
-    element_type VARCHAR(50) NOT NULL CHECK (element_type IN ('image', 'text', 'shape')),
-    position_x FLOAT DEFAULT 0,
-    position_y FLOAT DEFAULT 0,
-    width FLOAT,
-    height FLOAT,
-    rotation FLOAT DEFAULT 0,
-    style_data JSONB DEFAULT '{}',
-    content TEXT,
-    z_index INTEGER DEFAULT 0,
-    is_visible BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX idx_page_elements_page_id ON page_elements(page_id);
-CREATE INDEX idx_page_elements_z_index ON page_elements(page_id, z_index);
-
--- 角色表
+-- ==================== 角色表（第二阶段）====================
 CREATE TABLE characters (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -78,7 +68,7 @@ CREATE TABLE characters (
 );
 CREATE INDEX idx_characters_user_id ON characters(user_id);
 
--- 生成任务表
+-- ==================== 生成任务表 ====================
 CREATE TABLE generation_tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -87,7 +77,8 @@ CREATE TABLE generation_tasks (
     prompt TEXT NOT NULL,
     original_text TEXT,
     parsed_data JSONB,
-    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+    status VARCHAR(20) DEFAULT 'pending'
+        CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')),
     result_url VARCHAR(500),
     error_message TEXT,
     model_used VARCHAR(100),
@@ -100,7 +91,7 @@ CREATE INDEX idx_generation_tasks_user_id ON generation_tasks(user_id);
 CREATE INDEX idx_generation_tasks_book_id ON generation_tasks(book_id);
 CREATE INDEX idx_generation_tasks_status ON generation_tasks(status);
 
--- 生成图片表
+-- ==================== 生成图片表 ====================
 CREATE TABLE generated_images (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_id UUID NOT NULL REFERENCES generation_tasks(id) ON DELETE CASCADE,
@@ -118,3 +109,28 @@ CREATE TABLE generated_images (
 );
 CREATE INDEX idx_generated_images_task_id ON generated_images(task_id);
 CREATE INDEX idx_generated_images_user_id ON generated_images(user_id);
+
+-- ==================== updated_at 自动维护 ====================
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_users_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_books_updated_at
+    BEFORE UPDATE ON books
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_book_pages_updated_at
+    BEFORE UPDATE ON book_pages
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_generation_tasks_updated_at
+    BEFORE UPDATE ON generation_tasks
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();

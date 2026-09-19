@@ -1,0 +1,2 @@
+# 数据访问层：SQL、参数化查询与数据映射
+# 由 M1（用户系统）开始填充，如 UserRepository / GenerationTaskRepository

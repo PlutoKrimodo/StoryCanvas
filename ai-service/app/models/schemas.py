@@ -1,18 +1,22 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
 
 
 class TaskStatus(str, Enum):
-    """任务状态"""
+    """生成任务状态（与 sql/init.sql 的 CHECK 约束保持一致）"""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class ArtStyle(str, Enum):
     """艺术风格"""
+
     CARTOON = "cartoon"
     WATERCOLOR = "watercolor"
     OIL_PAINTING = "oil_painting"
@@ -22,6 +26,7 @@ class ArtStyle(str, Enum):
 
 class ParsedCharacter(BaseModel):
     """解析后的角色"""
+
     name: str
     description: str = ""
     appearance: str = ""
@@ -30,6 +35,7 @@ class ParsedCharacter(BaseModel):
 
 class ParsedScene(BaseModel):
     """解析后的场景"""
+
     location: str = ""
     time: str = ""
     weather: str = ""
@@ -38,26 +44,46 @@ class ParsedScene(BaseModel):
 
 class ParsedData(BaseModel):
     """解析后的结构化数据"""
-    characters: List[ParsedCharacter] = []
-    scene: ParsedScene = ParsedScene()
-    objects: List[str] = []
-    actions: List[str] = []
-    emotions: List[str] = []
-    style: Dict[str, Any] = {}
+
+    characters: List[ParsedCharacter] = Field(default_factory=list)
+    scene: ParsedScene = Field(default_factory=ParsedScene)
+    objects: List[str] = Field(default_factory=list)
+    actions: List[str] = Field(default_factory=list)
+    emotions: List[str] = Field(default_factory=list)
+    style: Dict[str, Any] = Field(default_factory=dict)
 
 
 class GenerationRequest(BaseModel):
     """生成请求"""
-    text: str = Field(..., description="用户输入的故事文本")
+
+    text: str = Field(..., min_length=1, max_length=2000, description="用户输入的故事文本")
     book_id: Optional[str] = Field(None, description="绘本 ID")
-    page_id: Optional[str] = Field(None, description="页面 ID")
-    character_ids: List[str] = Field(default=[], description="角色 ID 列表")
+    page_id: Optional[str] = Field(None, description="页容器 ID")
+    # 角色一致性属第二阶段能力，本轮不使用；保留字段以便后续扩展
+    character_ids: List[str] = Field(
+        default_factory=list, description="角色 ID 列表（第二阶段，本轮未启用）"
+    )
     style: ArtStyle = Field(default=ArtStyle.CARTOON, description="艺术风格")
-    parameters: Dict[str, Any] = Field(default={}, description="生成参数")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="生成参数")
+
+
+class TextAnalysisRequest(BaseModel):
+    """文本解析请求"""
+
+    text: str = Field(..., min_length=1, max_length=2000, description="待解析的故事文本")
+
+
+class AnalysisResult(BaseModel):
+    """文本解析结果"""
+
+    parsed_data: ParsedData
+    confidence: float = 0.0
+    raw_response: str = ""
 
 
 class GenerationResponse(BaseModel):
-    """生成响应"""
+    """生成任务响应"""
+
     task_id: str
     status: TaskStatus
     created_at: str
@@ -65,6 +91,7 @@ class GenerationResponse(BaseModel):
 
 class TaskResult(BaseModel):
     """任务结果"""
+
     task_id: str
     status: TaskStatus
     prompt: str
@@ -78,6 +105,7 @@ class TaskResult(BaseModel):
 
 class ImageGenerationParams(BaseModel):
     """图像生成参数"""
+
     prompt: str
     negative_prompt: str = ""
     width: int = 1024
@@ -90,15 +118,9 @@ class ImageGenerationParams(BaseModel):
 
 class ImageGenerationResult(BaseModel):
     """图像生成结果"""
+
     image_url: str
     width: int
     height: int
     seed: Optional[int] = None
     finish_reason: str = "success"
-
-
-class AnalysisResult(BaseModel):
-    """分析结果"""
-    parsed_data: ParsedData
-    confidence: float = 0.0
-    raw_response: str = ""

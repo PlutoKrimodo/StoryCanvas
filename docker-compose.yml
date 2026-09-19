@@ -1,19 +1,24 @@
 version: '3.8'
 
+# 安全约定：
+#   - 所有密钥类变量必须显式注入，缺失即启动失败（`${VAR:?}` 语法），
+#     避免出现 "secret"/"password" 这类弱默认值
+#   - 本地开发：cp .env.example .env 后填写真实值即可
+
 services:
-  # ==================== 数据库服务 ====================
+  # ==================== 数据库 ====================
   postgres:
     image: postgres:15-alpine
     container_name: storycanvas-postgres
     environment:
       POSTGRES_DB: ${DB_NAME:-storycanvas}
       POSTGRES_USER: ${DB_USER:-storycanvas}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 必须配置（见 .env.example）}
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-storycanvas}"]
       interval: 10s
@@ -38,7 +43,7 @@ services:
     networks:
       - storycanvas-network
 
-  # ==================== 后端服务 ====================
+  # ==================== C++ 后端 ====================
   backend:
     build:
       context: ./backend
@@ -51,12 +56,15 @@ services:
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-storycanvas}
       - DB_USER=${DB_USER:-storycanvas}
-      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD 必须配置}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_SECRET=${JWT_SECRET:-secret}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET 必须配置（见 .env.example）}
       - AI_SERVICE_URL=http://ai-service:8000
-      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:-apikey}
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:?AI_SERVICE_API_KEY 必须配置}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - STORAGE_PATH=/app/storage
     volumes:
       - ./storage:/app/storage
@@ -68,7 +76,7 @@ services:
     networks:
       - storycanvas-network
 
-  # ==================== AI Service ====================
+  # ==================== Python AI Service ====================
   ai-service:
     build:
       context: ./ai-service
@@ -77,19 +85,21 @@ services:
     ports:
       - "${AI_SERVICE_PORT:-8000}:8000"
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.openai.com/v1}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
-      - STABILITY_API_KEY=${STABILITY_API_KEY}
+      - STABILITY_API_KEY=${STABILITY_API_KEY:-}
       - STABILITY_API_HOST=${STABILITY_API_HOST:-https://api.stability.ai}
+      - INTERNAL_API_KEY=${AI_SERVICE_API_KEY:?AI_SERVICE_API_KEY 必须配置}
+      - CORS_ORIGINS=["http://localhost:5173"]
       - STORAGE_PATH=/app/storage
-      - INTERNAL_API_KEY=${AI_SERVICE_API_KEY:-apikey}
+      - DEBUG=${DEBUG:-false}
     volumes:
       - ./storage:/app/storage
     networks:
       - storycanvas-network
 
-  # ==================== 前端服务 ====================
+  # ==================== 前端 ====================
   frontend:
     build:
       context: ./frontend
@@ -110,8 +120,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./nginx/ssl:/etc/nginx/ssl
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - frontend
       - backend

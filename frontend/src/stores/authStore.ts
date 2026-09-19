@@ -1,18 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-interface User {
-  id: string
-  username: string
-  email: string
-  avatar?: string
-}
-
-interface AuthResponse {
-  user: User
-  access_token: string
-  refresh_token: string
-}
+import type { AuthResponse, User } from '../types/auth'
 
 interface AuthState {
   user: User | null
@@ -33,32 +22,36 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       isAuthenticated: false,
 
-      login: (response) => set({
-        user: response.user,
-        accessToken: response.access_token,
-        refreshToken: response.refresh_token,
-        isAuthenticated: true,
-      }),
+      login: (response) =>
+        set({
+          user: response.user,
+          accessToken: response.access_token,
+          refreshToken: response.refresh_token,
+          isAuthenticated: true,
+        }),
 
-      logout: () => set({
-        user: null,
-        accessToken: null,
-        refreshToken: null,
-        isAuthenticated: false,
-      }),
+      logout: () =>
+        set({
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+        }),
 
-      updateUser: (userData) => set((state) => ({
-        user: state.user ? { ...state.user, ...userData } : null,
-      })),
+      updateUser: (userData) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...userData } : null,
+        })),
     }),
     {
       name: 'auth-storage',
+      // 仅持久化 Token 与基础用户信息；禁止存放密码或任何服务端密钥
       partialize: (state) => ({
         user: state.user,
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
-    }
-  )
+    },
+  ),
 )

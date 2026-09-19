@@ -1,0 +1,2 @@
+# 将 TLS 证书放入本目录（cert.pem / key.pem）后，取消 nginx.conf 中 HTTPS 段的注释
+# 证书文件不入库
