@@ -1,6 +1,6 @@
 # Git 项目组织
 
-## 基于生成式 AI 的儿童绘本智能创作与在线编辑系统
+## 基于生成式 AI 的儿童绘本智能创作与图像生成系统
 
 **版本**: 1.0  
 **日期**: 2026-09-17  
@@ -412,8 +412,7 @@ git push origin --delete release/v1.0
 | book | 绘本相关 |
 | page | 页面相关 |
 | ai | AI 服务相关 |
-| editor | 编辑器相关 |
-| export | 导出相关 |
+| book | 绘本相关 |
 | db | 数据库相关 |
 | api | API 相关 |
 | frontend | 前端相关 |

@@ -1,10 +1,13 @@
 # REST API 设计
 
-## 基于生成式 AI 的儿童绘本智能创作与在线编辑系统
+## 基于生成式 AI 的儿童绘本智能创作与图像生成系统
 
-**版本**: 1.0  
-**日期**: 2026-09-17  
+**版本**: 2.0  
+**日期**: 2026-09-19  
 **作者**: StoryCanvas 开发团队
+
+> **v2.0 修订**：范围收敛为**用户管理**与**智能图像生成**两大子系统，**在线编辑子系统整体放弃**。
+> 已移除：页面模块、页面元素模块、绘本导出模块、图片上传接口。权威方案见 `docs/16-项目实施方案.md`。
 
 ---
 
@@ -445,327 +448,9 @@
 
 ---
 
-## 5. 页面模块 (Page)
+> **已移除**：原 §5 页面模块、§6 页面元素模块（在线编辑子系统遗留），`/pages`、`/elements` 接口不再提供。
 
-### 5.1 创建页面
-
-**POST** `/api/v1/books/{book_id}/pages`
-
-**描述**: 为指定绘本创建新页面
-
-**认证**: 需要 JWT Token
-
-**路径参数**:
-- `book_id`: 绘本 ID
-
-**请求体**:
-```json
-{
-  "page_number": 1,
-  "title": "第一页"
-}
-```
-
-**响应**:
-```json
-{
-  "code": 201,
-  "message": "创建成功",
-  "data": {
-    "id": "page-uuid",
-    "book_id": "book-uuid",
-    "page_number": 1,
-    "title": "第一页",
-    "canvas_data": {},
-    "created_at": "2026-09-17T10:00:00Z"
-  }
-}
-```
-
-### 5.2 获取页面详情
-
-**GET** `/api/v1/pages/{page_id}`
-
-**描述**: 获取指定页面的详细信息
-
-**认证**: 需要 JWT Token
-
-**路径参数**:
-- `page_id`: 页面 ID
-
-**响应**:
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "id": "page-uuid",
-    "book_id": "book-uuid",
-    "page_number": 1,
-    "title": "第一页",
-    "canvas_data": {
-      "version": "5.3.0",
-      "objects": []
-    },
-    "elements": [
-      {
-        "id": "element-uuid",
-        "element_type": "image",
-        "position_x": 100,
-        "position_y": 100,
-        "width": 200,
-        "height": 150,
-        "rotation": 0,
-        "style_data": {},
-        "content": null
-      }
-    ],
-    "created_at": "2026-09-17T10:00:00Z",
-    "updated_at": "2026-09-17T12:00:00Z"
-  }
-}
-```
-
-### 5.3 更新页面
-
-**PUT** `/api/v1/pages/{page_id}`
-
-**描述**: 更新页面信息和 Canvas 数据
-
-**认证**: 需要 JWT Token
-
-**路径参数**:
-- `page_id`: 页面 ID
-
-**请求体**:
-```json
-{
-  "title": "新标题",
-  "canvas_data": {
-    "version": "5.3.0",
-    "objects": [
-      {
-        "type": "image",
-        "left": 100,
-        "top": 100,
-        "src": "url"
-      }
-    ]
-  }
-}
-```
-
-**响应**:
-```json
-{
-  "code": 200,
-  "message": "更新成功",
-  "data": {
-    "id": "page-uuid",
-    "title": "新标题",
-    "canvas_data": {},
-    "updated_at": "2026-09-17T13:00:00Z"
-  }
-}
-```
-
-### 5.4 删除页面
-
-**DELETE** `/api/v1/pages/{page_id}`
-
-**描述**: 删除指定页面
-
-**认证**: 需要 JWT Token
-
-**路径参数**:
-- `page_id`: 页面 ID
-
-**响应**:
-```json
-{
-  "code": 200,
-  "message": "删除成功"
-}
-```
-
-### 5.5 重新排序页面
-
-**PUT** `/api/v1/books/{book_id}/pages/reorder`
-
-**描述**: 重新排序绘本的所有页面
-
-**认证**: 需要 JWT Token
-
-**路径参数**:
-- `book_id`: 绘本 ID
-
-**请求体**:
-```json
-{
-  "page_ids": ["page-1", "page-2", "page-3"]
-}
-```
-
-**响应**:
-```json
-{
-  "code": 200,
-  "message": "排序成功"
-}
-```
-
----
-
-## 6. 页面元素模块 (Element)
-
-### 6.1 添加元素
-
-**POST** `/api/v1/pages/{page_id}/elements`
-
-**描述**: 为指定页面添加新元素
-
-**认证**: 需要 JWT Token
-
-**路径参数**:
-- `page_id`: 页面 ID
-
-**请求体**:
-```json
-{
-  "element_type": "image",
-  "position_x": 100,
-  "position_y": 100,
-  "width": 200,
-  "height": 150,
-  "rotation": 0,
-  "style_data": {},
-  "content": null
-}
-```
-
-**响应**:
-```json
-{
-  "code": 201,
-  "message": "添加成功",
-  "data": {
-    "id": "element-uuid",
-    "element_type": "image",
-    "position_x": 100,
-    "position_y": 100,
-    "width": 200,
-    "height": 150,
-    "rotation": 0,
-    "style_data": {},
-    "content": null
-  }
-}
-```
-
-### 6.2 更新元素
-
-**PUT** `/api/v1/elements/{element_id}`
-
-**描述**: 更新指定元素
-
-**认证**: 需要 JWT Token
-
-**路径参数**:
-- `element_id`: 元素 ID
-
-**请求体**:
-```json
-{
-  "position_x": 150,
-  "position_y": 150,
-  "width": 250,
-  "height": 200,
-  "rotation": 45,
-  "style_data": {
-    "fontSize": 24,
-    "fontFamily": "Arial"
-  },
-  "content": "新文字内容"
-}
-```
-
-**响应**:
-```json
-{
-  "code": 200,
-  "message": "更新成功",
-  "data": {
-    "id": "element-uuid",
-    "position_x": 150,
-    "position_y": 150,
-    "width": 250,
-    "height": 200,
-    "rotation": 45,
-    "style_data": {},
-    "content": "新文字内容"
-  }
-}
-```
-
-### 6.3 删除元素
-
-**DELETE** `/api/v1/elements/{element_id}`
-
-**描述**: 删除指定元素
-
-**认证**: 需要 JWT Token
-
-**路径参数**:
-- `element_id`: 元素 ID
-
-**响应**:
-```json
-{
-  "code": 200,
-  "message": "删除成功"
-}
-```
-
-### 6.4 批量更新元素
-
-**PUT** `/api/v1/pages/{page_id}/elements/batch`
-
-**描述**: 批量更新页面的所有元素
-
-**认证**: 需要 JWT Token
-
-**路径参数**:
-- `page_id`: 页面 ID
-
-**请求体**:
-```json
-{
-  "elements": [
-    {
-      "id": "element-1",
-      "position_x": 100,
-      "position_y": 100
-    },
-    {
-      "id": "element-2",
-      "position_x": 200,
-      "position_y": 200
-    }
-  ]
-}
-```
-
-**响应**:
-```json
-{
-  "code": 200,
-  "message": "更新成功"
-}
-```
-
----
-
-## 7. 角色模块 (Character)
+## 7. 角色模块 (Character)（第二阶段）
 
 ### 7.1 创建角色
 
@@ -1099,40 +784,24 @@
 
 ## 9. 图片模块 (Image)
 
-### 9.1 上传图片
+### 9.1 下载生成图片（加分项）
 
-**POST** `/api/v1/images/upload`
+**GET** `/api/v1/images/{image_id}/download`
 
-**描述**: 上传图片文件
+**描述**: 下载单张 AI 生成图片
 
 **认证**: 需要 JWT Token
 
-**Content-Type**: multipart/form-data
+**路径参数**:
+- `image_id`: 图片 ID
 
-**请求体**:
-- `file`: 图片文件（JPEG, PNG, WebP）
-- `book_id`: 关联的绘本 ID（可选）
-- `page_id`: 关联的页面 ID（可选）
-
-**响应**:
-```json
-{
-  "code": 201,
-  "message": "上传成功",
-  "data": {
-    "id": "image-uuid",
-    "file_path": "url",
-    "file_size": 1024000,
-    "width": 800,
-    "height": 600,
-    "format": "jpeg"
-  }
-}
-```
+**响应**: 二进制图片流（`Content-Disposition: attachment`）
 
 **错误响应**:
-- 400: 文件格式不支持
-- 413: 文件大小超限
+- 403: 无权访问该图片
+- 404: 图片不存在
+
+> **已移除**：原「上传图片」接口（`POST /images/upload`）属在线编辑子系统，本轮不再提供上传入口。
 
 ### 9.2 获取图片信息
 
@@ -1220,79 +889,6 @@
 
 ---
 
-## 10. 导出模块 (Export)
-
-### 10.1 导出绘本
-
-**POST** `/api/v1/books/{book_id}/export`
-
-**描述**: 导出绘本为指定格式
-
-**认证**: 需要 JWT Token
-
-**路径参数**:
-- `book_id`: 绘本 ID
-
-**请求体**:
-```json
-{
-  "format": "pdf",
-  "options": {
-    "page_size": "A4",
-    "orientation": "portrait",
-    "quality": "high"
-  }
-}
-```
-
-**响应**:
-```json
-{
-  "code": 200,
-  "message": "导出成功",
-  "data": {
-    "download_url": "url",
-    "file_size": 5120000,
-    "format": "pdf"
-  }
-}
-```
-
-**支持的导出格式**:
-- `pdf`: PDF 文档
-- `png`: PNG 图片（多页会生成压缩包）
-- `jpeg`: JPEG 图片
-
-### 10.2 获取导出任务状态
-
-**GET** `/api/v1/export/{task_id}`
-
-**描述**: 获取导出任务的状态
-
-**认证**: 需要 JWT Token
-
-**路径参数**:
-- `task_id`: 导出任务 ID
-
-**响应**:
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "task_id": "export-task-uuid",
-    "status": "completed",
-    "download_url": "url",
-    "file_size": 5120000,
-    "format": "pdf",
-    "created_at": "2026-09-17T10:00:00Z",
-    "completed_at": "2026-09-17T10:02:00Z"
-  }
-}
-```
-
----
-
 ## 11. 健康检查模块 (Health)
 
 ### 11.1 系统健康检查
@@ -1343,8 +939,17 @@
 ### 12.4 请求大小限制
 
 - 普通 API: 1MB
-- 文件上传: 10MB
 - JSON 请求: 1MB
+
+> 原「文件上传 10MB」限制随图片上传接口一并移除。
+
+### 12.5 凭据与加密（新增）
+
+- 密码字段仅接收明文输入，服务端 **bcrypt 加盐哈希**后存储；任何接口都不得返回密码或哈希
+- 登录/注册请求体中的 `password` 不写入日志
+- 登录失败统一返回「邮箱或密码错误」，不区分账号是否存在
+- Token 通过 `Authorization` 头传输，不放在 URL 查询参数中
+- 生产环境强制 HTTPS
 
 ---
 

@@ -31,7 +31,7 @@
 
 ### 1.2 为什么需要这些工具？
 
-StoryCanvas 是一个**前后端分离**的项目，包含三个独立的子系统：
+StoryCanvas 是一个**前后端分离**的项目，由三个**技术层**（前端 / 后端 / AI 服务）组成，共同支撑两大**业务子系统**（用户管理、智能图像生成）。
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -45,9 +45,9 @@ StoryCanvas 是一个**前后端分离**的项目，包含三个独立的子系�
                                         └───────┘
 ```
 
-每个子系统都需要不同的编程语言和运行工具：
+每个技术层都需要不同的编程语言和运行工具：
 
-| 子系统 | 编程语言 | 需要的工具 | 用途 |
+| 技术层 | 编程语言 | 需要的工具 | 用途 |
 |--------|----------|------------|------|
 | C++ 后端 | C++ | GCC, CMake, Drogon | 处理 HTTP 请求、业务逻辑 |
 | Python AI Service | Python | Python3, pip, FastAPI | AI 文本分析、图像生成 |
@@ -141,7 +141,7 @@ sudo systemctl enable postgresql  # 设置开机自启
 sudo -u postgres psql
 
 -- 创建专用用户（不要用 root 跑应用）
-CREATE USER storycanvas WITH PASSWORD 'storycanvas20061104';
+CREATE USER storycanvas WITH PASSWORD 'your_password_here';
 
 -- 创建数据库
 CREATE DATABASE storycanvas OWNER storycanvas;
@@ -170,10 +170,10 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=storycanvas
 DB_USER=storycanvas
-DB_PASSWORD=storycanvas20061104
+DB_PASSWORD=your_password_here
 
 # JWT 密钥（用于用户登录验证，随机生成的长字符串）
-JWT_SECRET=24bd313c8ccbc4675f862cdfb5a3b547a12486c9346d38bea88b43f52b5fa3d2
+JWT_SECRET=your_jwt_secret_here
 
 # AI 服务地址
 AI_SERVICE_URL=http://localhost:8000
@@ -622,7 +622,7 @@ frontend/
     │       └── Home.tsx        # 首页组件
     ├── components/             # 可复用组件（后续开发）
     │   ├── common/             # 通用组件
-    │   ├── editor/             # 编辑器组件
+    │   ├── book/               # 绘本相关组件
     │   ├── ai/                 # AI 相关组件
     │   ├── book/               # 绘本组件
     │   └── layout/             # 布局组件
@@ -882,7 +882,7 @@ users ──1:N──▶ books ──1:N──▶ book_pages ──1:N──▶ 
 执行初始化：
 
 ```bash
-PGPASSWORD=storycanvas20061104 psql -h localhost -U storycanvas \
+PGPASSWORD=your_password_here psql -h localhost -U storycanvas \
   -d storycanvas -f sql/init.sql
 ```
 
@@ -983,7 +983,7 @@ sudo systemctl status postgresql
 
 ```bash
 # 连接数据库
-PGPASSWORD=storycanvas20061104 psql -h localhost -U storycanvas -d storycanvas
+PGPASSWORD=your_password_here psql -h localhost -U storycanvas -d storycanvas
 
 # 查看所有表
 \dt
