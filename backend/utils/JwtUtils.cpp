@@ -17,6 +17,7 @@ int JwtUtils::refreshTokenExpiry_ = 604800;
 
 std::mutex JwtUtils::mutex_;
 std::set<std::string> JwtUtils::revokedJtis_;
+std::unordered_map<std::string, time_t> JwtUtils::userRevokedBefore_;
 
 namespace {
 
@@ -61,7 +62,7 @@ std::string JwtUtils::buildToken(const std::string &userId,
                                  const std::string &type,
                                  const std::string &jti,
                                  int expirySeconds) {
-    spdlog::info("JWT buildToken: type={}, jti={}", type, jti);
+    spdlog::debug("JWT buildToken: type={}", type);
     const time_t now = std::time(nullptr);
 
     json payload = {
@@ -73,14 +74,10 @@ std::string JwtUtils::buildToken(const std::string &userId,
         {"exp", static_cast<long long>(now + expirySeconds)},
     };
 
-    spdlog::info("JWT buildToken: encoding header...");
     const std::string headerSegment = encodeSegment(kHeaderJson);
-    spdlog::info("JWT buildToken: encoding payload...");
     const std::string payloadSegment = encodeSegment(payload.dump());
     const std::string signingInput = headerSegment + "." + payloadSegment;
-    spdlog::info("JWT buildToken: signing...");
-    std::string sig = sign(signingInput);
-    spdlog::info("JWT buildToken: done");
+    const std::string sig = sign(signingInput);
 
     return signingInput + "." + sig;
 }
@@ -90,17 +87,13 @@ TokenPair JwtUtils::generateTokenPair(const std::string &userId, const std::stri
         throw std::runtime_error("JwtUtils 未初始化");
     }
 
-    spdlog::info("JWT: userId={}, username={}", userId, username);
-
     // 无状态模式下 iat 相同会导致同秒内生成的 Refresh Token 完全一致，
     // 这里依赖 jti 随机值保证唯一性
     TokenPair pair;
     pair.accessToken = buildToken(userId, username, "access",
                                   EncryptionUtils::randomHex(16), accessTokenExpiry_);
-    spdlog::info("JWT: access token built");
     pair.refreshToken = buildToken(userId, username, "refresh",
                                    EncryptionUtils::randomHex(16), refreshTokenExpiry_);
-    spdlog::info("JWT: refresh token built");
     return pair;
 }
 
@@ -152,6 +145,11 @@ std::optional<TokenPayload> JwtUtils::verifyToken(const std::string &token,
         return std::nullopt;
     }
 
+    // 整用户撤销（如修改密码后）：早于撤销时刻签发的 Token 一律失效
+    if (isUserTokenRevoked(result.userId, result.issuedAt)) {
+        return std::nullopt;
+    }
+
     return result;
 }
 
@@ -200,4 +198,36 @@ bool JwtUtils::isRevoked(const std::string &jti) {
     }
     std::lock_guard<std::mutex> lock(mutex_);
     return revokedJtis_.count(jti) > 0;
+}
+
+void JwtUtils::revokeAllForUser(const std::string &userId) {
+    if (userId.empty()) {
+        return;
+    }
+    const time_t revokedAt = std::time(nullptr);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        userRevokedBefore_[userId] = revokedAt;
+    }
+    // 日志不记录 userId 与 Token，避免身份信息与凭据落盘
+    spdlog::info("JWT: 已撤销某用户全部历史 Token");
+}
+
+bool JwtUtils::isUserTokenRevoked(const std::string &userId, time_t issuedAt) {
+    if (userId.empty()) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto it = userRevokedBefore_.find(userId);
+    if (it == userRevokedBefore_.end()) {
+        return false;
+    }
+    // iat 为秒级精度：同秒签发的 Token 也视为失效，避免改密当秒的旧 Token 残留
+    return issuedAt <= it->second;
+}
+
+void JwtUtils::resetRevocations() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    revokedJtis_.clear();
+    userRevokedBefore_.clear();
 }

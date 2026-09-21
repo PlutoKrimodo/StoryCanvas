@@ -5,7 +5,7 @@
 bool UserRepository::create(User &user){
     try{
         auto db = drogon::app().getDbClient();
-        spdlog::info("执行用户插入: username={}, email={}", user.username, user.email);
+        spdlog::debug("执行用户插入: username={}", user.username);
         auto result = db->execSqlSync(
             "INSERT INTO users (username, email, password_hash, avatar) "
             "VALUES ($1, $2, $3, $4) "
@@ -15,20 +15,12 @@ bool UserRepository::create(User &user){
             user.passwordHash,
             user.avatar.value_or("")
         );
-        spdlog::info("插入成功, rows={}", result.size());
 
-        if(!result.empty()){
-            spdlog::info("读取 id 列...");
-            auto idView = result[0]["id"].as<std::string_view>();
-            spdlog::info("id={}", std::string(idView));
-            user.id = std::string(idView);
-            spdlog::info("读取 created_at 列...");
-            auto catView = result[0]["created_at"].as<std::string_view>();
-            user.createdAt = std::string(catView);
-            spdlog::info("读取 updated_at 列...");
-            auto uatView = result[0]["updated_at"].as<std::string_view>();
-            user.updatedAt = std::string(uatView);
-            spdlog::info("用户创建完成: id={}", user.id);
+        if (!result.empty()) {
+            user.id = std::string(result[0]["id"].as<std::string_view>());
+            user.createdAt = std::string(result[0]["created_at"].as<std::string_view>());
+            user.updatedAt = std::string(result[0]["updated_at"].as<std::string_view>());
+            spdlog::debug("用户创建完成: id={}", user.id);
             return true;
         }
         return false;

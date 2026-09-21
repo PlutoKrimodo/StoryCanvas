@@ -205,6 +205,8 @@ ServiceResult UserService::changePassword(const std::string &userId, const Chang
         return result;
     }
 
+    // 修改密码后撤销该用户全部历史 Token（Access + Refresh），强制重新登录
+    JwtUtils::revokeAllForUser(userId);
 
     result.success = true;
     result.code = 200;

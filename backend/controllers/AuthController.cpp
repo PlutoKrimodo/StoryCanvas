@@ -63,18 +63,12 @@ void AuthController::registerUser(
         return;
     }
 
-    spdlog::info("注册: username={}", registerReq.username);
+    spdlog::debug("注册请求: username={}", registerReq.username);
     auto result = UserService::registerUser(registerReq);
-    spdlog::info("注册完成: success={}, code={}", result.success, result.code);
+    spdlog::debug("注册完成: success={}, code={}", result.success, result.code);
 
     if (result.success) {
-        spdlog::info("构建响应...");
-        auto respBody = ApiResponse::created(result.message, result.data);
-        spdlog::info("序列化响应...");
-        auto resp = sendJson(result.code, respBody);
-        spdlog::info("发送响应...");
-        callback(resp);
-        spdlog::info("callback 完成");
+        callback(sendJson(result.code, ApiResponse::created(result.message, result.data)));
     } else {
         callback(sendJson(result.code, ApiResponse::error(result.code, result.message)));
     }

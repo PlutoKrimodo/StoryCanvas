@@ -73,6 +73,11 @@ else()
         "如需 bcrypt，安装 libbcrypt 后重新执行 cmake 即可。")
 endif()
 
+# ==================== 单元测试 ====================
+# tests/ 目录需要 GoogleTest；未安装时仅告警并跳过，不影响主程序构建
+enable_testing()
+add_subdirectory(tests)
+
 # ==================== 安装配置 ====================
 install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin
