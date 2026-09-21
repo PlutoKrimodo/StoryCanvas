@@ -19,8 +19,12 @@ User User::fromRow(const drogon::orm::Row &row) {
     user.email = row["email"].as<std::string>();
     user.passwordHash = row["password_hash"].as<std::string>();
     
+    // 空串与 NULL 统一视为"无头像"，保证与其他接口返回 null 的口径一致
     if (!row["avatar"].isNull()) {
-        user.avatar = std::string(row["avatar"].as<std::string_view>());
+        const std::string avatarValue(row["avatar"].as<std::string_view>());
+        if (!avatarValue.empty()) {
+            user.avatar = avatarValue;
+        }
     }
     
     user.isActive = row["is_active"].as<bool>();

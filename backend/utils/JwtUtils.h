@@ -35,7 +35,9 @@ struct RefreshResult {
  * - 自行实现 HS256 签发与校验，底层使用 OpenSSL 的 HMAC-SHA256，
  *   避免额外引入 jwt-cpp 依赖
  * - 双 Token：Access（短寿命）+ Refresh（长寿命）
- * - 支持按 jti 撤销（内存黑名单，后续可平滑迁移到 Redis）
+ * - 支持两种撤销：按 jti 精确撤销单个 Token，以及按 userId 整批撤销
+ *   （修改密码后强制该用户全部会话重新登录）
+ * - 撤销记录为内存黑名单，后续可平滑迁移到 Redis
  */
 class JwtUtils {
 public:

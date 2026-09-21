@@ -26,18 +26,28 @@ void AuthController::asyncHandleHttpRequest(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback) {
 
-    auto path = req->getPath();
-    
-    if (path == "/api/v1/auth/register") {
-        registerUser(req, std::move(callback));
-    } else if (path == "/api/v1/auth/login") {
-        loginUser(req, std::move(callback));
-    } else if (path == "/api/v1/auth/refresh") {
-        refreshToken(req, std::move(callback));
-    } else if (path == "/api/v1/auth/logout") {
-        logout(req, std::move(callback));
-    } else {
-        callback(ApiResponse::fail(404, "接口不存在"));
+    // 分发时会把 callback move 进各处理函数，故先保留一份副本用于异常兜底，
+    // 避免在 catch 中调用已被移动的对象
+    const std::function<void(const HttpResponsePtr &)> fallback = callback;
+
+    try {
+        auto path = req->getPath();
+
+        if (path == "/api/v1/auth/register") {
+            registerUser(req, std::move(callback));
+        } else if (path == "/api/v1/auth/login") {
+            loginUser(req, std::move(callback));
+        } else if (path == "/api/v1/auth/refresh") {
+            refreshToken(req, std::move(callback));
+        } else if (path == "/api/v1/auth/logout") {
+            logout(req, std::move(callback));
+        } else {
+            fallback(ApiResponse::fail(404, "接口不存在"));
+        }
+    } catch (const std::exception &e) {
+        // 兜底：记录异常并返回统一 500，避免 Drogon 直接中断请求
+        spdlog::error("认证接口异常: path={}, what={}", req->getPath(), e.what());
+        fallback(ApiResponse::fail(500, "服务内部错误"));
     }
 }
 
