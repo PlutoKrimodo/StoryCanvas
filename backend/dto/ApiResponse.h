@@ -1,6 +1,7 @@
 #pragma once
 
 #include <nlohmann/json.hpp>
+#include <drogon/HttpResponse.h>
 #include <string>
 
 using json = nlohmann::json;
@@ -14,6 +15,19 @@ using json = nlohmann::json;
  */
 class ApiResponse {
 public:
+    static drogon::HttpResponsePtr ok(const json &body, drogon::HttpStatusCode code = drogon::k200OK) {
+        auto resp = drogon::HttpResponse::newHttpResponse();
+        resp->setStatusCode(code);
+        resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+        resp->setBody(body.dump());
+        return resp;
+    }
+
+    static drogon::HttpResponsePtr fail(int code, const std::string &message) {
+        json body = {{"code", code}, {"message", message}, {"data", nullptr}};
+        return ok(body, static_cast<drogon::HttpStatusCode>(code));
+    }
+
     static json success(const std::string &message) {
         return {
             {"code", 200},

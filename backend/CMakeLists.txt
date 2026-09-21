@@ -27,17 +27,17 @@ include_directories(
 
 # ==================== 源文件 ====================
 file(GLOB_RECURSE SOURCES
-    "controllers/*.cc"
-    "services/*.cc"
-    "repositories/*.cc"
-    "models/*.cc"
-    "filters/*.cc"
-    "dto/*.cc"
-    "utils/*.cc"
+    "controllers/*.cpp"
+    "services/*.cpp"
+    "repositories/*.cpp"
+    "models/*.cpp"
+    "filters/*.cpp"
+    "dto/*.cpp"
+    "utils/*.cpp"
 )
 
 # 创建可执行文件
-add_executable(${PROJECT_NAME} main.cc ${SOURCES})
+add_executable(${PROJECT_NAME} main.cpp ${SOURCES})
 
 # 链接库
 target_link_libraries(${PROJECT_NAME}

@@ -1,6 +1,7 @@
 #include "JwtUtils.h"
 
 #include <nlohmann/json.hpp>
+#include <spdlog/spdlog.h>
 
 #include <stdexcept>
 #include <vector>
@@ -60,6 +61,7 @@ std::string JwtUtils::buildToken(const std::string &userId,
                                  const std::string &type,
                                  const std::string &jti,
                                  int expirySeconds) {
+    spdlog::info("JWT buildToken: type={}, jti={}", type, jti);
     const time_t now = std::time(nullptr);
 
     json payload = {
@@ -71,11 +73,16 @@ std::string JwtUtils::buildToken(const std::string &userId,
         {"exp", static_cast<long long>(now + expirySeconds)},
     };
 
+    spdlog::info("JWT buildToken: encoding header...");
     const std::string headerSegment = encodeSegment(kHeaderJson);
+    spdlog::info("JWT buildToken: encoding payload...");
     const std::string payloadSegment = encodeSegment(payload.dump());
     const std::string signingInput = headerSegment + "." + payloadSegment;
+    spdlog::info("JWT buildToken: signing...");
+    std::string sig = sign(signingInput);
+    spdlog::info("JWT buildToken: done");
 
-    return signingInput + "." + sign(signingInput);
+    return signingInput + "." + sig;
 }
 
 TokenPair JwtUtils::generateTokenPair(const std::string &userId, const std::string &username) {
@@ -83,13 +90,17 @@ TokenPair JwtUtils::generateTokenPair(const std::string &userId, const std::stri
         throw std::runtime_error("JwtUtils 未初始化");
     }
 
+    spdlog::info("JWT: userId={}, username={}", userId, username);
+
     // 无状态模式下 iat 相同会导致同秒内生成的 Refresh Token 完全一致，
     // 这里依赖 jti 随机值保证唯一性
     TokenPair pair;
     pair.accessToken = buildToken(userId, username, "access",
                                   EncryptionUtils::randomHex(16), accessTokenExpiry_);
+    spdlog::info("JWT: access token built");
     pair.refreshToken = buildToken(userId, username, "refresh",
                                    EncryptionUtils::randomHex(16), refreshTokenExpiry_);
+    spdlog::info("JWT: refresh token built");
     return pair;
 }
 

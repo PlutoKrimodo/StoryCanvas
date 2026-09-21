@@ -11,7 +11,7 @@ namespace cors {
 /**
  * 为响应写入统一 CORS 头。
  *
- * 预检响应（CorsFilter）与实际业务响应（main.cc 中的 post-handling advice）
+ * 预检响应（CorsFilter）与实际业务响应（main.cpp 中的 post-handling advice）
  * 共用本函数，避免两处维护导致行为不一致。
  *
  * @param resp          待写入头的响应

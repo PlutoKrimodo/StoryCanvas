@@ -6,9 +6,5 @@ void HealthController::asyncHandleHttpRequest(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback) {
 
-    auto resp = HttpResponse::newHttpJsonResponse(
-        ApiResponse::success("StoryCanvas Backend is running")
-    );
-    resp->setStatusCode(k200OK);
-    callback(resp);
+    callback(ApiResponse::ok(ApiResponse::success("StoryCanvas Backend is running")));
 }

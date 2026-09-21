@@ -14,7 +14,7 @@ WORKDIR /src
 
 # 先拷贝构建描述与源码，利用 Docker 层缓存
 COPY CMakeLists.txt ./
-COPY main.cc ./
+COPY main.cpp ./
 COPY config ./config
 COPY controllers ./controllers
 COPY dto ./dto

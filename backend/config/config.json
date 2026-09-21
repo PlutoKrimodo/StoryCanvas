@@ -13,16 +13,6 @@
 
   "//": "以下段落仅保留非敏感默认值；password / secret / api_key 一律留空，由环境变量注入（见 .env.example）",
 
-  "database": {
-    "type": "postgresql",
-    "host": "localhost",
-    "port": 5432,
-    "database": "storycanvas",
-    "username": "storycanvas",
-    "password": "",
-    "min_connections": 5,
-    "max_connections": 20
-  },
   "redis": {
     "host": "localhost",
     "port": 6379,

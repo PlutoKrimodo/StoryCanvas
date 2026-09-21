@@ -11,11 +11,11 @@ void CorsFilter::doFilter(const HttpRequestPtr &req,
     if (req->getMethod() == Options) {
         auto resp = HttpResponse::newHttpResponse();
         resp->setStatusCode(k204NoContent);
-        cors::addCorsHeaders(resp, req->getHeader("Origin"));
+        cors::addCorsHeaders(resp, std::string(req->getHeader("Origin")));
         fcb(resp);
         return;
     }
 
-    // 其余请求放行；响应头由 post-handling advice 统一补齐
+    // 放行后由 post-handling 添加 CORS 头（已移除，改在此处放行）
     fccb();
 }

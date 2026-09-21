@@ -1,4 +1,5 @@
 #include <drogon/drogon.h>
+#include <drogon/orm/DbConfig.h>
 #include <spdlog/spdlog.h>
 
 #include <memory>
@@ -37,19 +38,31 @@ int main() {
 
     auto &app = drogon::app();
 
-    // 3. 加载 Drogon 配置（端口、线程数等）
+    // 3. 用 ConfigManager 解析后的密码注入 Drogon 数据库连接
+    {
+        drogon::orm::PostgresConfig dbCfg;
+        dbCfg.host = ConfigManager::dbHost;
+        dbCfg.port = static_cast<unsigned short>(ConfigManager::dbPort);
+        dbCfg.databaseName = ConfigManager::dbName;
+        dbCfg.username = ConfigManager::dbUser;
+        dbCfg.password = ConfigManager::dbPassword;
+        dbCfg.connectionNumber = 5;
+        dbCfg.name = "default";
+        dbCfg.isFast = false;
+        dbCfg.characterSet = "utf8";
+        dbCfg.timeout = -1;
+        dbCfg.autoBatch = false;
+        app.addDbClient(dbCfg);
+    }
+
+    // 4. 加载 Drogon 配置（端口、线程数等）
     app.loadConfigFile("./config/config.json");
     app.setLogLevel(toLogLevel(ConfigManager::logLevel));
 
     // 4. 全局跨域过滤器（仅处理 OPTIONS 预检）
     app.registerFilter(std::make_shared<CorsFilter>());
 
-    // 5. 为所有响应统一补齐 CORS 头
-    //    HttpFilter 无法修改下游响应，因此这里用后置 advice 实现
-    app.registerPostHandlingAdvice(
-        [](const HttpRequestPtr &req, const HttpResponsePtr &resp) {
-            cors::addCorsHeaders(resp, req->getHeader("Origin"));
-        });
+    // 5. CORS 头由 CorsFilter 统一处理
 
     // 6. Controller 通过 PATH_LIST_BEGIN / PATH_ADD 宏在编译期自动注册，
     //    无需在此手工登记（如 HealthController -> GET /health、/api/v1/health）
