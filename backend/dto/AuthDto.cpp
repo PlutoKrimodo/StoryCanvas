@@ -78,7 +78,7 @@ json UserInfo::toJson() const {
         {"id", id},
         {"username", username},
         {"email", email},
-        {"avatar", avatar.empty() ? nullptr : avatar},
+        {"avatar", avatar.empty() ? nlohmann::json(nullptr) : nlohmann::json(avatar)},
         {"created_at", createdAt}
     };
 }

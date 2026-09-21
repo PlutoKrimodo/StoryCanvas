@@ -36,6 +36,7 @@ ServiceResult UserService::registerUser(const RegisterRequest &req) {
     authResponse.user.id = user.id;
     authResponse.user.username = user.username;
     authResponse.user.email = user.email;
+    authResponse.user.avatar = user.avatar.value_or("");
     authResponse.user.createdAt = user.createdAt;
     authResponse.accessToken = tokenPair.accessToken;
     authResponse.refreshToken = tokenPair.refreshToken;
@@ -71,6 +72,7 @@ ServiceResult UserService::loginUser(const LoginRequest &req) {
     authResponse.user.id = user.id;
     authResponse.user.username = user.username;
     authResponse.user.email = user.email;
+    authResponse.user.avatar = user.avatar.value_or("");
     authResponse.user.createdAt = user.createdAt;
     authResponse.accessToken = tokenPair.accessToken;
     authResponse.refreshToken = tokenPair.refreshToken;

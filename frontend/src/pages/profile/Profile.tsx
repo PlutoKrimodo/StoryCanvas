@@ -2,6 +2,7 @@ import { Avatar, Button, Card, Descriptions, Typography } from 'antd'
 import { UserOutlined } from '@ant-design/icons'
 
 import { useAuth } from '../../hooks/useAuth'
+import { formatDateTime } from '../../utils/datetime'
 
 const { Title } = Typography
 
@@ -27,7 +28,7 @@ function Profile() {
             <Descriptions.Item label="用户名">{user?.username ?? '-'}</Descriptions.Item>
             <Descriptions.Item label="邮箱">{user?.email ?? '-'}</Descriptions.Item>
             <Descriptions.Item label="注册时间">
-              {user?.created_at ?? '-'}
+              {formatDateTime(user?.created_at,'YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
           </Descriptions>
 
