@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import ErrorBoundary from './components/common/ErrorBoundary'
+import BookDetail from './pages/books/BookDetail'
+import BookList from './pages/books/BookList'
 import Home from './pages/home/Home'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
@@ -40,7 +42,24 @@ function App() {
             }
           />
 
-          {/* 待接入：/books（M2 绘本管理）、/generate（M4 图像生成） */}
+          <Route
+            path="/books"
+            element={
+              <ProtectedRoute>
+                <BookList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/books/:id"
+            element={
+              <ProtectedRoute>
+                <BookDetail />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* 待接入：/generate（M4 图像生成） */}
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

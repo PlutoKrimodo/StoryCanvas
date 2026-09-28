@@ -29,8 +29,11 @@ function Home() {
               用户管理子系统已就绪；智能图像生成子系统将在后续里程碑接入。
             </Paragraph>
 
-            <div className="flex gap-3 mt-6">
-              <Button type="primary" onClick={() => navigate('/profile')}>
+            <div className="flex flex-wrap gap-3 mt-6">
+              <Button type="primary" onClick={() => navigate('/books')}>
+                我的绘本
+              </Button>
+              <Button onClick={() => navigate('/profile')}>
                 个人中心
               </Button>
               <Button onClick={signOut}>退出登录</Button>

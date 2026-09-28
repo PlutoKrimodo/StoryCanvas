@@ -4,15 +4,9 @@
 #include <string>
 #include "../dto/AuthDto.h"
 #include "../dto/UserDto.h"
+#include "ServiceResult.h"
 
 using json = nlohmann::json;
-
-struct ServiceResult{
-    bool success = false;
-    int code = 500;
-    std::string message;
-    json data;
-};
 
 class UserService{
 public:
