@@ -8,7 +8,7 @@
 
 > **v2.0 修订**：范围收敛为**用户管理**与**智能图像生成**两大子系统（重点为后者），**在线编辑子系统整体放弃**。
 >
-> 本文件中的 **Phase 6（在线编辑器）**、**Phase 7（多页绘本）**、**Phase 9（导出功能）已作废**；最新阶段划分与排期以 `docs/16-项目实施方案.md` 第 8、9 章为准。
+> 本文件中的 **Phase 6（在线编辑器）**、**Phase 7（多页绘本）** 已作废；**Phase 9（导出功能）以「轻量多页 PDF 导出（前端）」部分恢复**（见 §2.10）。最新阶段划分与排期以 `docs/16-项目实施方案.md` 第 8、9 章为准。
 
 ---
 
@@ -38,7 +38,7 @@ Phase 11: Docker 部署（1-2 天）
 Phase 12: 课程报告（3-5 天）
 ```
 
-> ~~Phase 6 在线编辑器~~、~~Phase 7 多页绘本~~、~~Phase 9 导出功能~~ 已作废。
+> ~~Phase 6 在线编辑器~~、~~Phase 7 多页绘本~~ 已作废；~~Phase 9 导出功能~~ **改为「轻量多页 PDF 导出（前端）」部分恢复**。
 
 ### 1.2 时间估算
 
@@ -275,7 +275,8 @@ DELETE /api/v1/books/{book_id}
 - 文本分析服务
 - Prompt 优化服务
 - LLM Provider 抽象
-- Mock Provider（测试用）
+- DeepSeek Provider（真实，演示默认）
+- Mock Provider（开发/测试/兜底，由 `LLM_PROVIDER` 开关切换）
 
 #### 涉及的代码目录
 ```
@@ -284,6 +285,7 @@ ai-service/
 │   ├── services/text_analyzer.py
 │   ├── services/prompt_optimizer.py
 │   ├── providers/llm/base.py
+│   ├── providers/llm/deepseek_provider.py
 │   ├── providers/llm/mock_provider.py
 │   ├── prompts/text_analysis.py
 │   └── prompts/prompt_optimization.py
@@ -301,12 +303,13 @@ POST /api/v1/analysis/parse
 #### 测试
 - 文本分析测试
 - Prompt 优化测试
-- Mock Provider 测试
+- DeepSeek Provider 测试（真实，需 API Key）
+- Mock Provider 测试（离线）
 
 #### 完成标准
 - 文本分析服务正常工作
 - Prompt 优化服务正常工作
-- Mock Provider 可用于测试
+- `LLM_PROVIDER=deepseek` 可真实解析；`LLM_PROVIDER=mock` 可离线测试
 
 ---
 
@@ -318,8 +321,12 @@ POST /api/v1/analysis/parse
 #### 要实现的功能
 - 图像生成服务
 - Image Provider 抽象
+- 豆包·Seedream Provider（真实，主用）
+- 通义万相 Provider（真实，备用）
+- Mock Provider（开发/测试/兜底，由 `IMAGE_PROVIDER` 开关切换）
 - 生成任务管理
 - 生成结果存储
+- 保存到绘本（页容器绑定 `image_id`）
 
 #### 涉及的代码目录
 ```
@@ -334,6 +341,8 @@ ai-service/
 ├── app/services/image_generator.py
 ├── app/services/task_manager.py
 ├── app/providers/image/base.py
+├── app/providers/image/doubao_provider.py
+├── app/providers/image/wanx_provider.py
 ├── app/providers/image/mock_provider.py
 ├── app/api/v1/generation.py
 └── tests/
@@ -518,46 +527,44 @@ ai-service/
 
 ---
 
-### 2.10 Phase 9: 导出功能（**已作废**）
+### 2.10 Phase 9: 导出功能（**v2.2 部分恢复：轻量多页 PDF，前端实现**）
 
-> **PDF 合成导出依赖排版能力，本轮放弃。** 导出降级为「单张图片下载」，列为加分项。
+> **在线排版式 PDF 合成仍放弃**；本轮仅实现**轻量多页导出**——把绘本已绑定图片按页序拼成 PDF（每页「整张图 + 页标题」），由**前端**生成，**不设后端导出接口**、不落盘。
 
 #### 目标
-实现绘本导出功能。
+在绘本详情页手动触发，导出含页标题的多页 PDF 并下载。
 
 #### 要实现的功能
-- 导出为 PDF
-- 导出为 PNG/JPEG
-- 导出选项配置
+- 页列表读取（按 `page_number`，含 `image_id` / `image_url`）
+- 前端合成 PDF（jsPDF + html2canvas）
+- 浏览器直接下载（不落盘）
 
 #### 涉及的代码目录
 ```
-backend/
-├── controllers/ExportController.cc
-├── services/ExportService.cc
-└── utils/ImageProcessor.cc
-
 frontend/
-├── src/components/export/ExportDialog.tsx
-└── src/api/export.ts
+├── src/utils/pdf.ts               # jsPDF + html2canvas 合成
+├── src/components/book/ExportPdfButton.tsx
+└── src/api/pages.ts               # 页列表 / 保存到绘本
 ```
 
 #### 数据库变化
-无
+- `book_pages` 新增 `image_id`（绑定生成图）
 
 #### API
 ```
-POST /api/v1/books/{book_id}/export
-GET /api/v1/export/{task_id}
+POST /api/v1/books/{book_id}/pages     # 保存到绘本（绑定 image_id）
+GET  /api/v1/books/{book_id}/pages     # 页列表
+# 无服务端导出接口：PDF 由前端生成
 ```
 
 #### 测试
-- PDF 导出测试
-- 图片导出测试
+- 页绑定测试
+- 前端 PDF 导出测试（含中文标题渲染、页数上限）
 
 #### 完成标准
-- 可以导出为 PDF
-- 可以导出为图片
+- 保存到绘本后可在绘本详情页导出含页标题的多页 PDF
+- 页数超限有明确提示
+- 导出全流程在浏览器完成、不落盘
 
 ---
 
@@ -770,7 +777,8 @@ Day 7: 测试 + 演示准备
 | 角色一致性 | | ✅ | | 第二阶段 |
 | 多艺术风格 | | | ✅ | 加分项 |
 | 单张图片下载 | | | ✅ | 加分项 |
-| ~~图片/文字编辑、页面管理、PDF 导出~~ | | | | **已放弃** |
+| PDF 导出（轻量多页，前端） | ✅ | | | 必须（v2.2 加回） |
+| ~~图片/文字编辑、页面管理、多页手动排版~~ | | | | **已放弃** |
 
 ### 5.2 技术实现建议
 
@@ -795,7 +803,7 @@ Day 7: 测试 + 演示准备
 | 风险 | 影响 | 概率 | 缓解措施 |
 |------|------|------|---------|
 | Drogon 学习曲线陡峭 | 高 | 中 | 提前学习，参考示例 |
-| AI API 不稳定/限流 | 高 | 中 | 使用 Mock Provider 测试 |
+| 真实 AI API 不稳定/限流/欠费 | 高 | 中 | 主备双厂商（豆包/通义万相）互替，一键切回 Mock Provider，演示前预生成备份图 |
 | 图像生成耗时/成本高 | 中 | 中 | 异步任务 + 频次上限 |
 | 加密库集成（bcrypt/OpenSSL） | 中 | 中 | 骨架阶段先验证编译链接 |
 | WSL 环境问题 | 中 | 低 | 使用 Docker 部署 |

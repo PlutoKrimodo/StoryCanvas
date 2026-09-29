@@ -2,7 +2,7 @@
 # StoryCanvas AI Service 镜像
 #
 # 说明：
-#   - 服务商密钥（OPENAI_API_KEY / STABILITY_API_KEY）与内部鉴权密钥
+#   - 服务商密钥（DEEPSEEK_API_KEY / ARK_API_KEY / DASHSCOPE_API_KEY）与内部鉴权密钥
 #     INTERNAL_API_KEY 一律通过环境变量注入，镜像内不含明文凭据
 #   - 以非 root 用户运行
 # ============================================================

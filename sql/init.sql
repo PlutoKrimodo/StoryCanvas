@@ -4,6 +4,7 @@
 -- 范围：用户管理子系统 + 智能图像生成子系统
 -- 说明：
 --   - 在线编辑子系统已放弃，page_elements 表与 canvas_data 字段不再创建
+--   - v2.2：book_pages 增加 image_id（绑定生成图，用于轻量多页 PDF 导出）
 --   - gen_random_uuid() 为 PostgreSQL 13+ 内置函数，无需 uuid-ossp 扩展
 --   - 密码仅存 bcrypt / PBKDF2 单向哈希，禁止明文
 -- ============================================================
@@ -48,11 +49,15 @@ CREATE TABLE book_pages (
     page_number INTEGER NOT NULL,
     title VARCHAR(200),
     thumbnail VARCHAR(500),
+    -- 绑定该页使用的生成图（「保存到绘本」时写入，用于 PDF 导出）
+    -- 外键引用 generated_images（其建表在后），故在文件末尾用 ALTER 补齐
+    image_id UUID,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(book_id, page_number)
 );
 CREATE INDEX idx_book_pages_book_id ON book_pages(book_id);
+CREATE INDEX idx_book_pages_image_id ON book_pages(image_id);
 
 -- ==================== 角色表（第二阶段）====================
 CREATE TABLE characters (
@@ -109,6 +114,13 @@ CREATE TABLE generated_images (
 );
 CREATE INDEX idx_generated_images_task_id ON generated_images(task_id);
 CREATE INDEX idx_generated_images_user_id ON generated_images(user_id);
+
+-- book_pages.image_id 外键（generated_images 建表在后，这里补齐）
+ALTER TABLE book_pages
+    ADD CONSTRAINT fk_book_pages_image
+    FOREIGN KEY (image_id) REFERENCES generated_images(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN book_pages.image_id IS '该页绑定的生成图（用于 PDF 导出），图片删除时置空';
 
 -- ==================== updated_at 自动维护 ====================
 CREATE OR REPLACE FUNCTION set_updated_at()

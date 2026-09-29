@@ -2,9 +2,11 @@
 
 ## 基于生成式 AI 的儿童绘本智能创作与图像生成系统
 
-**版本**: 1.0  
-**日期**: 2026-09-17  
+**版本**: 1.1  
+**日期**: 2026-09-29  
 **作者**: StoryCanvas 开发团队
+
+> **v1.1 修订**：AI Provider 落地策略调整——演示默认使用真实商业 API（LLM：**DeepSeek**；图像：**豆包·Seedream（主）/ 通义万相（备）**，均国内直连），Mock 作为开发 / 测试 / 故障兜底，通过 `LLM_PROVIDER` / `IMAGE_PROVIDER` 开关切换。权威方案见 `docs/16-项目实施方案.md` 第 0 节。
 
 ---
 
@@ -40,16 +42,14 @@ ai-service/
 │   │   ├── llm/                    # LLM 提供商
 │   │   │   ├── __init__.py
 │   │   │   ├── base.py             # LLM 基类
-│   │   │   ├── openai_provider.py  # OpenAI 实现
-│   │   │   ├── zhipu_provider.py   # 智谱 AI 实现
-│   │   │   └── mock_provider.py    # Mock 提供商（测试用）
+│   │   │   ├── deepseek_provider.py # DeepSeek 实现（真实，默认）
+│   │   │   └── mock_provider.py    # Mock 提供商（开发/测试/兜底）
 │   │   └── image/                  # 图像生成提供商
 │   │       ├── __init__.py
 │   │       ├── base.py             # 图像生成基类
-│   │       ├── dalle_provider.py   # DALL-E 实现
-│   │       ├── stability_provider.py # Stability AI 实现
-│   │       ├── sdwebui_provider.py # Stable Diffusion WebUI
-│   │       └── mock_provider.py    # Mock 提供商（测试用）
+│   │       ├── doubao_provider.py  # 豆包·Seedream（火山方舟）实现（真实，主用）
+│   │       ├── wanx_provider.py    # 通义万相（阿里云百炼）实现（真实，备用）
+│   │       └── mock_provider.py    # Mock 提供商（开发/测试/兜底）
 │   ├── models/                     # 数据模型
 │   │   ├── __init__.py
 │   │   ├── schemas.py              # Pydantic 模型
@@ -82,7 +82,9 @@ ai-service/
 │   │   └── test_image_generator.py
 │   ├── test_providers/             # 提供商测试
 │   │   ├── __init__.py
-│   │   ├── test_openai_provider.py
+│   │   ├── test_deepseek_provider.py
+│   │   ├── test_doubao_provider.py
+│   │   ├── test_wanx_provider.py
 │   │   └── test_mock_provider.py
 │   └── test_api/                   # API 测试
 │       ├── __init__.py
@@ -192,13 +194,20 @@ class Settings(BaseSettings):
     # CORS 配置
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:8080"]
     
-    # AI 服务配置
-    OPENAI_API_KEY: str = ""
-    OPENAI_API_BASE: str = "https://api.openai.com/v1"
-    OPENAI_MODEL: str = "gpt-3.5-turbo"
+    # AI 服务配置：真实厂商为演示默认，Mock 为兜底
+    LLM_PROVIDER: str = "deepseek"          # deepseek | mock
+    IMAGE_PROVIDER: str = "doubao"          # doubao | wanx | mock
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_API_BASE: str = "https://api.deepseek.com"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
     
-    STABILITY_API_KEY: str = ""
-    STABILITY_API_HOST: str = "https://api.stability.ai"
+    ARK_API_KEY: str = ""                    # 火山方舟（豆包·Seedream，主用）
+    ARK_API_BASE: str = "https://ark.cn-beijing.volces.com/api/v3"
+    ARK_IMAGE_MODEL: str = "doubao-seedream-4-0-xxxx"
+    
+    DASHSCOPE_API_KEY: str = ""              # 阿里云百炼（通义万相，备用）
+    DASHSCOPE_API_BASE: str = "https://dashscope.aliyuncs.com"
+    WANX_IMAGE_MODEL: str = "wan2.6-image"
     
     # 超时配置
     LLM_TIMEOUT: int = 30
@@ -739,7 +748,7 @@ class MockImageProvider(ImageProvider):
         return True
 ```
 
-#### providers/image/dalle_provider.py
+#### providers/image/doubao_provider.py
 
 ```python
 import httpx
@@ -748,17 +757,17 @@ from .base import ImageProvider
 from ...models.schemas import ImageGenerationParams, ImageGenerationResult
 from ...utils.config import settings
 
-class DallEProvider(ImageProvider):
-    """OpenAI DALL-E 提供商"""
+class DoubaoProvider(ImageProvider):
+    """豆包·Seedream（火山方舟）提供商（演示默认）"""
     
     def __init__(self):
         super().__init__()
-        self.api_key = settings.OPENAI_API_KEY
-        self.api_base = settings.OPENAI_API_BASE
-        self.model = "dall-e-3"
+        self.api_key = settings.ARK_API_KEY
+        self.api_base = settings.ARK_API_BASE
+        self.model = settings.ARK_IMAGE_MODEL
     
     async def generate(self, params: ImageGenerationParams) -> ImageGenerationResult:
-        """调用 DALL-E 生成图像"""
+        """调用豆包·Seedream 生成图像"""
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.api_base}/images/generations",
@@ -777,7 +786,7 @@ class DallEProvider(ImageProvider):
             )
             
             if response.status_code != 200:
-                raise Exception(f"DALL-E API 错误: {response.text}")
+                raise Exception(f"豆包 Seedream API 错误: {response.text}")
             
             data = response.json()
             return ImageGenerationResult(
@@ -882,14 +891,26 @@ from ...services.task_manager import TaskManagerService
 from ...services.text_analyzer import TextAnalyzerService
 from ...services.prompt_optimizer import PromptOptimizerService
 from ...services.image_generator import ImageGeneratorService
-from ...providers.llm.openai_provider import OpenAIProvider
-from ...providers.image.dalle_provider import DallEProvider
+from ...utils.config import settings
+from ...providers.llm.deepseek_provider import DeepSeekProvider
+from ...providers.llm.mock_provider import MockLLMProvider
+from ...providers.image.doubao_provider import DoubaoProvider
+from ...providers.image.wanx_provider import WanxProvider
+from ...providers.image.mock_provider import MockImageProvider
+
+def get_llm_provider():
+    """按 LLM_PROVIDER 开关选择 LLM 实现（演示默认 deepseek，可切 mock）"""
+    return {"deepseek": DeepSeekProvider, "mock": MockLLMProvider}[settings.LLM_PROVIDER]()
+
+def get_image_provider():
+    """按 IMAGE_PROVIDER 开关选择图像实现（演示默认 doubao，备 wanx，可切 mock）"""
+    return {"doubao": DoubaoProvider, "wanx": WanxProvider, "mock": MockImageProvider}[settings.IMAGE_PROVIDER]()
 
 @lru_cache()
 def get_task_manager() -> TaskManagerService:
     """获取任务管理器"""
-    llm_provider = OpenAIProvider()
-    image_provider = DallEProvider()
+    llm_provider = get_llm_provider()
+    image_provider = get_image_provider()
     
     text_analyzer = TextAnalyzerService(llm_provider)
     prompt_optimizer = PromptOptimizerService()
@@ -1023,12 +1044,24 @@ HOST=0.0.0.0
 PORT=8000
 DEBUG=true
 
-# OpenAI 配置
-OPENAI_API_KEY=sk-your-api-key
-OPENAI_API_BASE=https://api.openai.com/v1
+# Provider 开关（真实厂商为演示默认，mock 为兜底）
+LLM_PROVIDER=deepseek          # deepseek | mock
+IMAGE_PROVIDER=doubao          # doubao | wanx | mock
 
-# Stability AI 配置
-STABILITY_API_KEY=sk-your-stability-key
+# DeepSeek（LLM）
+DEEPSEEK_API_KEY=sk-your-deepseek-key
+DEEPSEEK_API_BASE=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+
+# 火山方舟（豆包·Seedream，主用）
+ARK_API_KEY=your-ark-key
+ARK_API_BASE=https://ark.cn-beijing.volces.com/api/v3
+ARK_IMAGE_MODEL=doubao-seedream-4-0-xxxx
+
+# 阿里云百炼（通义万相，备用）
+DASHSCOPE_API_KEY=sk-your-dashscope-key
+DASHSCOPE_API_BASE=https://dashscope.aliyuncs.com
+WANX_IMAGE_MODEL=wan2.6-image
 
 # 内部 API 配置
 INTERNAL_API_KEY=your-internal-key

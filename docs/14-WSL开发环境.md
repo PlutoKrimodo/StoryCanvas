@@ -447,9 +447,12 @@ REDIS_PORT=6379
 # JWT 配置
 JWT_SECRET=your-jwt-secret
 
-# AI API 配置
-OPENAI_API_KEY=sk-your-openai-key
-STABILITY_API_KEY=sk-your-stability-key
+# AI API 配置（演示默认真实厂商，Mock 兜底）
+LLM_PROVIDER=deepseek
+IMAGE_PROVIDER=doubao
+DEEPSEEK_API_KEY=sk-your-deepseek-key
+ARK_API_KEY=your-ark-key
+DASHSCOPE_API_KEY=sk-your-dashscope-key
 
 # AI Service 配置
 AI_SERVICE_URL=http://localhost:8000

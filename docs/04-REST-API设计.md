@@ -7,7 +7,9 @@
 **作者**: StoryCanvas 开发团队
 
 > **v2.0 修订**：范围收敛为**用户管理**与**智能图像生成**两大子系统，**在线编辑子系统整体放弃**。
-> 已移除：页面模块、页面元素模块、绘本导出模块、图片上传接口。权威方案见 `docs/16-项目实施方案.md`。
+> 已移除：页面**画布**模块、页面元素模块、图片上传接口。
+>
+> **v2.2 修订**：加回**轻量多页 PDF 导出**（前端 jsPDF + html2canvas 生成，**不设服务端导出接口**）；新增**页容器模块**（§5）用于「保存到绘本」与「读取页列表」。权威方案见 `docs/16-项目实施方案.md`。
 
 ---
 
@@ -373,7 +375,8 @@
         "id": "page-uuid",
         "page_number": 1,
         "title": "第一页",
-        "thumbnail": "url"
+        "thumbnail": "url",
+        "image_id": "generated-image-uuid"
       }
     ],
     "created_at": "2026-09-17T10:00:00Z",
@@ -448,7 +451,74 @@
 
 ---
 
-> **已移除**：原 §5 页面模块、§6 页面元素模块（在线编辑子系统遗留），`/pages`、`/elements` 接口不再提供。
+> **已移除**：原 §5 页面**画布**模块、§6 页面元素模块（在线编辑子系统遗留），画布更新 `/pages/{id}`、`/elements` 接口不再提供；页容器能力见下方 §5。
+
+## 5. 页容器模块 (Book Page)（v2.2）
+
+> 仅用于「保存到绘本」与「读取页列表」，**不含画布/排版编辑**。PDF 导出由前端完成，**不提供 `/books/{id}/export` 接口**。
+
+### 5.1 保存到绘本（创建/更新页并绑定图片）
+
+**POST** `/api/v1/books/{book_id}/pages`
+
+**描述**: 将某张生成图保存为绘本的一页；`page_number` 已存在则更新该页的标题与图片绑定
+
+**认证**: 需要 JWT Token
+
+**请求体**:
+```json
+{
+  "page_number": 1,
+  "title": "第一页",
+  "image_id": "generated-image-uuid"
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "保存成功",
+  "data": {
+    "id": "page-uuid",
+    "book_id": "book-uuid",
+    "page_number": 1,
+    "title": "第一页",
+    "image_id": "generated-image-uuid",
+    "updated_at": "2026-09-29T10:00:00Z"
+  }
+}
+```
+
+**错误响应**:
+- 403: 无权操作该绘本
+- 404: 绘本或图片不存在
+- 422: 参数校验失败
+
+### 5.2 获取页列表
+
+**GET** `/api/v1/books/{book_id}/pages`
+
+**描述**: 按 `page_number` 升序返回该绘本的页（供前端合成 PDF）
+
+**认证**: 需要 JWT Token
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": [
+    {
+      "id": "page-uuid",
+      "page_number": 1,
+      "title": "第一页",
+      "image_id": "generated-image-uuid",
+      "image_url": "/storage/users/{user_id}/books/{book_id}/images/xxx.png"
+    }
+  ]
+}
+```
 
 ## 7. 角色模块 (Character)（第二阶段）
 

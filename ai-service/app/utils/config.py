@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """AI Service 配置
 
-    密钥类配置（OPENAI_API_KEY、STABILITY_API_KEY、INTERNAL_API_KEY）
+    密钥类配置（DEEPSEEK_API_KEY、ARK_API_KEY、DASHSCOPE_API_KEY、INTERNAL_API_KEY）
     一律由环境变量或 .env 注入，禁止硬编码。
     """
 
@@ -31,14 +31,25 @@ class Settings(BaseSettings):
     # 支持两种写法：JSON 数组或逗号分隔字符串
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:8080"]
 
-    # ==================== LLM 配置 ====================
-    OPENAI_API_KEY: str = ""
-    OPENAI_API_BASE: str = "https://api.openai.com/v1"
-    OPENAI_MODEL: str = "gpt-3.5-turbo"
+    # ==================== AI Provider 开关 ====================
+    # 演示默认走真实厂商；开发/测试/故障兜底可切 mock
+    LLM_PROVIDER: str = "deepseek"   # deepseek | mock
+    IMAGE_PROVIDER: str = "doubao"   # doubao | wanx | mock
+
+    # ==================== LLM 配置（DeepSeek）====================
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_API_BASE: str = "https://api.deepseek.com"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
 
     # ==================== 图像生成配置 ====================
-    STABILITY_API_KEY: str = ""
-    STABILITY_API_HOST: str = "https://api.stability.ai"
+    # 主用：豆包·Seedream（火山方舟）
+    ARK_API_KEY: str = ""
+    ARK_API_BASE: str = "https://ark.cn-beijing.volces.com/api/v3"
+    ARK_IMAGE_MODEL: str = "doubao-seedream-4-0-xxxx"
+    # 备用：通义万相（阿里云百炼）
+    DASHSCOPE_API_KEY: str = ""
+    DASHSCOPE_API_BASE: str = "https://dashscope.aliyuncs.com"
+    WANX_IMAGE_MODEL: str = "wan2.6-image"
 
     # ==================== 超时配置 ====================
     LLM_TIMEOUT: int = 30

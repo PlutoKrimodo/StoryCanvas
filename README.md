@@ -17,6 +17,7 @@ StoryCanvas 是一个基于生成式 AI 的儿童绘本智能创作与图像生�
 - **AI 图像生成**: 文本解析、Prompt 优化、图像生成
 - **任务管理**: 异步生成任务与状态查询
 - **结果预览**: 生成结果展示与重新生成
+- **PDF 导出**: 绘本按页合成多页 PDF（含页标题）下载
 
 
 ### 技术栈
@@ -26,6 +27,7 @@ StoryCanvas 是一个基于生成式 AI 的儿童绘本智能创作与图像生�
 | 前端 | React, TypeScript, Ant Design, Tailwind CSS |
 | 后端 | C++17, Drogon Framework |
 | AI Service | Python, FastAPI |
+| AI 服务商 | DeepSeek（LLM）/ 豆包·Seedream · 通义万相（图像，Mock 可降级） |
 | 数据库 | PostgreSQL |
 | 缓存 | Redis (可选) |
 | 部署 | Docker, Docker Compose |
@@ -166,7 +168,7 @@ StoryCanvas/
 
 **总时间估算**: 约 20-29 天（精简 MVP 10-12 天）
 
-> 原 Phase 6 在线编辑器、Phase 7 多页绘本、Phase 9 导出功能已放弃（属在线编辑子系统）。权威排期见 [项目实施方案](docs/16-项目实施方案.md)。
+> 原 Phase 6 在线编辑器、Phase 7 多页绘本已放弃（属在线编辑子系统）；**PDF 导出以「轻量多页（前端生成）」形式加回**。权威排期见 [项目实施方案](docs/16-项目实施方案.md)。
 
 ---
 
@@ -182,6 +184,7 @@ StoryCanvas/
 - AI 图像生成
 - 生成结果预览
 - 重新生成
+- PDF 导出（轻量多页，前端生成）
 
 ### 第二阶段
 
