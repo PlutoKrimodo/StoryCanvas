@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TaskStatus(str, Enum):
@@ -53,58 +53,78 @@ class ParsedData(BaseModel):
     style: Dict[str, Any] = Field(default_factory=dict)
 
 
-class GenerationRequest(BaseModel):
-    """生成请求"""
-
-    text: str = Field(..., min_length=1, max_length=2000, description="用户输入的故事文本")
-    book_id: Optional[str] = Field(None, description="绘本 ID")
-    page_id: Optional[str] = Field(None, description="页容器 ID")
-    # 角色一致性属第二阶段能力，本轮不使用；保留字段以便后续扩展
-    character_ids: List[str] = Field(
-        default_factory=list, description="角色 ID 列表（第二阶段，本轮未启用）"
-    )
-    style: ArtStyle = Field(default=ArtStyle.CARTOON, description="艺术风格")
-    parameters: Dict[str, Any] = Field(default_factory=dict, description="生成参数")
-
-
 class TextAnalysisRequest(BaseModel):
-    """文本解析请求"""
+    """文本解析请求（Phase 4）"""
 
     text: str = Field(..., min_length=1, max_length=2000, description="待解析的故事文本")
 
 
-class AnalysisResult(BaseModel):
-    """文本解析结果"""
+class PromptOptimizeRequest(BaseModel):
+    """Prompt 优化请求（Phase 4）
 
-    parsed_data: ParsedData
-    confidence: float = 0.0
-    raw_response: str = ""
+    可直接传文本（内部先解析），也可直接传已解析的结构化数据。
+    两者至少提供一个。
+    """
 
-
-class GenerationResponse(BaseModel):
-    """生成任务响应"""
-
-    task_id: str
-    status: TaskStatus
-    created_at: str
+    text: Optional[str] = Field(None, max_length=2000, description="故事文本（内部先解析）")
+    parsed_data: Optional[ParsedData] = Field(None, description="已解析的结构化数据")
+    style: ArtStyle = Field(default=ArtStyle.CARTOON, description="艺术风格")
+    additional_params: Dict[str, Any] = Field(default_factory=dict, description="附加参数")
 
 
-class TaskResult(BaseModel):
-    """任务结果"""
+class PromptOptimizeResponse(BaseModel):
+    """Prompt 优化响应（Phase 4）"""
 
-    task_id: str
-    status: TaskStatus
     prompt: str
-    original_text: str
+    negative_prompt: str = ""
+    style: ArtStyle = ArtStyle.CARTOON
+    parsed_data: ParsedData
+
+
+class ImageGenerateRequest(BaseModel):
+    """图像生成请求（Phase 5，无状态一站式）
+
+    请求方（C++ 后端）负责持有任务状态，这里一次调用完成：
+    文本解析 → Prompt 优化 → 图像生成 → 落盘。
+    """
+
+    text: str = Field(..., min_length=1, max_length=2000, description="用户输入的故事文本")
+    style: ArtStyle = Field(default=ArtStyle.CARTOON, description="艺术风格")
+    user_id: Optional[str] = Field(None, description="用户 ID（用于存储分层）")
+    book_id: Optional[str] = Field(None, description="绘本 ID（用于存储分层）")
+    task_id: Optional[str] = Field(None, description="后端任务 ID（仅透传记录，不参与状态管理）")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="生成参数（宽高等）")
+
+
+class GeneratedImageInfo(BaseModel):
+    """落盘后的生成图信息（Phase 5）"""
+
+    image_id: str
+    file_path: str
+    width: int
+    height: int
+    format: str
+    file_size: int
+    seed: Optional[int] = None
+    provider: str = "mock"
+
+
+class ImageGenerateResponse(BaseModel):
+    """图像生成响应（Phase 5）"""
+
+    # `model_used` 与数据库字段保持一致，需关闭 pydantic 的 model_ 保留命名空间校验
+    model_config = ConfigDict(protected_namespaces=())
+
+    status: str = "success"
+    prompt: str
+    negative_prompt: str = ""
     parsed_data: Optional[ParsedData] = None
-    result: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
-    created_at: str
-    completed_at: Optional[str] = None
+    model_used: str = ""
+    image: GeneratedImageInfo
 
 
 class ImageGenerationParams(BaseModel):
-    """图像生成参数"""
+    """图像生成参数（Provider 层入参）"""
 
     prompt: str
     negative_prompt: str = ""
@@ -117,10 +137,21 @@ class ImageGenerationParams(BaseModel):
 
 
 class ImageGenerationResult(BaseModel):
-    """图像生成结果"""
+    """图像生成结果（Provider 层出参）"""
 
     image_url: str
     width: int
     height: int
     seed: Optional[int] = None
     finish_reason: str = "success"
+    # Provider 若直接返回二进制（如 Mock），可通过该字段携带，避免二次下载
+    image_bytes: Optional[bytes] = None
+    content_type: Optional[str] = None
+
+
+class AnalysisResult(BaseModel):
+    """文本解析结果"""
+
+    parsed_data: ParsedData
+    confidence: float = 0.0
+    raw_response: str = ""

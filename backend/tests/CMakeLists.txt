@@ -19,6 +19,7 @@ add_executable(storycanvas_tests
     test_password_utils.cpp
     test_jwt_utils.cpp
     test_encryption_utils.cpp
+    test_file_utils.cpp
     ${UTIL_SOURCES}
 )
 

@@ -35,9 +35,10 @@
   "security": {
     "encryption_key": ""
   },
+  "//storage": "路径相对服务的工作目录：开发时后端从 backend/ 启动，故用 ../storage 指向仓库根 storage/；docker-compose 会以 STORAGE_PATH=/app/storage 覆盖",
   "storage": {
     "type": "local",
-    "local_path": "./storage"
+    "local_path": "../storage"
   },
   "log": {
     "loggers": [

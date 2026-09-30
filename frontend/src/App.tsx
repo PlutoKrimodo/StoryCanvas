@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import ErrorBoundary from './components/common/ErrorBoundary'
 import BookDetail from './pages/books/BookDetail'
 import BookList from './pages/books/BookList'
+import Generate from './pages/generation/Generate'
 import Home from './pages/home/Home'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
@@ -59,7 +60,15 @@ function App() {
             }
           />
 
-          {/* 待接入：/generate（M4 图像生成） */}
+          {/* AI 图像生成（Phase 5 核心页面） */}
+          <Route
+            path="/generate"
+            element={
+              <ProtectedRoute>
+                <Generate />
+              </ProtectedRoute>
+            }
+          />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

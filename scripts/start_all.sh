@@ -315,7 +315,7 @@ if [ "$WITH_AI" -eq 1 ]; then
       ok "AI Service 就绪"
     else
       dump_log ai-service 20
-      warn "AI Service 未就绪（当前仅健康检查，不影响用户/绘本功能）"
+      warn "AI Service 未就绪（用户/绘本功能不受影响，但无法生成插画）"
     fi
   fi
 fi

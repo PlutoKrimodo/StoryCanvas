@@ -7,6 +7,7 @@
 
 #include "filters/CorsFilter.h"
 #include "filters/CorsHeaders.h"
+#include "services/GenerationService.h"
 #include "utils/ConfigManager.h"
 #include "utils/JwtUtils.h"
 #include "utils/PasswordUtils.h"
@@ -67,8 +68,14 @@ int main() {
     // 6. Controller 通过 PATH_LIST_BEGIN / PATH_ADD 宏在编译期自动注册，
     //    无需在此手工登记（如 HealthController -> GET /health、/api/v1/health）
 
+    // 7. 启动生成任务工作线程（内存队列，见 docs/08 第一阶段方案）
+    //    延迟到事件循环跑起来之后再启动：start() 里的遗留任务清理需要数据库连接，
+    //    且工作线程调用 HttpClient 依赖主事件循环，二者都不能在 run() 之前执行
+    app.getLoop()->runAfter(0.5, []() { GenerationService::start(); });
+
     spdlog::info("StoryCanvas Backend 启动中...");
     app.run();
 
+    GenerationService::stop();
     return 0;
 }

@@ -1,0 +1,12 @@
+[project]
+name = "storycanvas-ai-service"
+version = "1.0.0"
+description = "StoryCanvas AI Service（文本解析 / Prompt 优化 / 图像生成）"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+# pytest-asyncio 0.21 需要显式开启 auto 模式才能自动运行 async 测试
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]

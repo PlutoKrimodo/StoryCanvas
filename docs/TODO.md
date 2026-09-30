@@ -16,7 +16,12 @@
 
 | 编号 | 条目 | 状态 | 计划时机 | 依赖 |
 |------|------|------|---------|------|
-| T-1 | Guest-first（游客优先，先体验后注册） | 待实施 | Phase 6 之后、Phase 10 之前 | Phase 5 生成闭环 |
+| T-1 | Guest-first（游客优先，先体验后注册） | 待实施（前置已就绪） | Phase 6 之后、Phase 10 之前 | ✅ Phase 5 生成闭环已完成（2026-09-30）|
+
+> **2026-09-30 更新**：Phase 4 / 5 / 6 已完成，T-1 的两个**前置决策**已按本节 §5 落地
+> （生成器做成可复用组件、「生成一张图」与「保存到绘本」解耦）。
+> 也就是说，现在做 T-1 的「观感层」只剩路由调整（把生成器搬上首页 + 轻量登录 Modal），
+> **不必再改 Phase 5 的任何代码结构**。
 
 ---
 
@@ -38,7 +43,7 @@
 | 接口契约 | `docs/04` §8、`backend/controllers/BookController.h` | 生成 / 绘本接口均挂 `JwtFilter`，无 Token 返回 401 | 「匿名生成」属于新增契约 |
 | 数据模型 | `sql/init.sql` | `books.user_id`、`generation_tasks.user_id`、`generated_images.user_id` 均为 `NOT NULL` 外键 | 匿名没有 `user_id`，结果**无法落库** |
 | 已预留 | `docs/16` §7.4 | 限流已设「**匿名** 100 次/分、认证 1000 次/分、AI 生成 10 次/分」 | 说明设计上本就允许匿名请求，只是未用到生成上 |
-| 生成前端 | `frontend/src/pages/generation/`（当前为空） | Phase 5 才实现 | 「首页即生成器」依赖 Phase 5 |
+| 生成前端 | `frontend/src/pages/generation/Generate.tsx` + `components/ai/` | ✅ Phase 5 已实现 | 「首页即生成器」只差把它搬上首页 |
 
 **结论**：观感便宜、能力昂贵。两者要拆开评估。
 
@@ -78,9 +83,13 @@ Phase 4 (AI 基础) → Phase 5 (生成闭环·核心) → Phase 6 (预览/历�
 1. **生成器做成「可复用组件」，不要写死在 `/generate` 页面里**
    → 以后把它搬上首页（`/`）只是挪位置，而不是重写页面 + 重排路由守卫。
    - 相关位置：`frontend/src/pages/generation/`、`frontend/src/components/ai/`
+   - ✅ **已落地（2026-09-30）**：生成器为独立组件 `components/ai/GenerationForm.tsx`，
+     `pages/generation/Generate.tsx` 只是它的一个宿主页面。
 2. **「生成一张图」与「保存到某个绘本」解耦**
    → 让生成动作不天然依赖 `book_id`，匿名「先出图、登录后再存入绘本」才顺理成章。
    - 相关位置：Phase 5 的 `GenerationService` / `GenerationTask` 数据流
+   - ✅ **已落地（2026-09-30）**：`CreateGenerationRequest.book_id` 可选；
+     AI 侧未绑定绘本时按 `unassigned` 目录落盘；前端「保存到绘本」弹窗事后绑定 `image_id`。
 
 ### 6. 待决策清单
 
@@ -130,4 +139,4 @@ Phase 4 (AI 基础) → Phase 5 (生成闭环·核心) → Phase 6 (预览/历�
 - [项目实施方案](16-项目实施方案.md)（§7.4 限流、§8.x 阶段排期、§13.3 演示流程）
 - [REST API 设计](04-REST-API设计.md)（§8 生成模块认证要求）
 - [安全机制设计](10-安全机制设计.md)
-- [开发记录](开发记录.md)（§五 常用启动命令速查、§七 问题与解决方案）
+- [开发记录](开发记录.md)（§九 常用启动命令速查、§十 问题与解决方案、§六 Phase 5 生成闭环）

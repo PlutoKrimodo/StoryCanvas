@@ -26,11 +26,14 @@ function Home() {
               {user?.username ?? '未登录'}
             </Paragraph>
             <Paragraph type="secondary">
-              用户管理子系统已就绪；智能图像生成子系统将在后续里程碑接入。
+              输入一段故事文字，AI 帮你生成儿童绘本插画；也可把结果保存到绘本并导出多页 PDF。
             </Paragraph>
 
             <div className="flex flex-wrap gap-3 mt-6">
-              <Button type="primary" onClick={() => navigate('/books')}>
+              <Button type="primary" onClick={() => navigate('/generate')}>
+                AI 生成插画
+              </Button>
+              <Button onClick={() => navigate('/books')}>
                 我的绘本
               </Button>
               <Button onClick={() => navigate('/profile')}>

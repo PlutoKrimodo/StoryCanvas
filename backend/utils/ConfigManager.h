@@ -32,6 +32,7 @@ public:
     // AI Service
     static std::string aiServiceUrl;
     static std::string aiServiceApiKey;
+    static int aiServiceTimeout;  // 单次 AI 调用超时（秒），图像生成为长耗时操作
 
     // 其他
     static std::string corsOrigins;    // 逗号分隔的允许来源

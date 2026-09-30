@@ -22,6 +22,26 @@ export const TASK_STATUS_TEXT: Record<string, string> = {
   cancelled: '已取消',
 }
 
+/** 生成任务状态标签配色（Ant Design Tag color） */
+export const TASK_STATUS_COLOR: Record<string, string> = {
+  pending: 'processing',
+  processing: 'processing',
+  completed: 'success',
+  failed: 'error',
+  cancelled: 'default',
+}
+
+/** 生成图尺寸可选项（与后端 _resolve_size 的 256~2048 约束一致） */
+export const IMAGE_SIZE_OPTIONS = [
+  { value: '768x768', label: '768 × 768（方形·较快）' },
+  { value: '1024x1024', label: '1024 × 1024（方形·推荐）' },
+  { value: '1024x768', label: '1024 × 768（横向）' },
+  { value: '768x1024', label: '768 × 1024（纵向·绘本页）' },
+] as const
+
+/** 单本绘本页数上限（与后端 SavePageRequest 校验、PDF 导出上限保持一致） */
+export const MAX_PAGES_PER_BOOK = 50
+
 /** 绘本状态可选项（与后端 books.status 枚举保持一致） */
 export const BOOK_STATUS_OPTIONS: Array<{ value: BookStatus; label: string }> = [
   { value: 'draft', label: '草稿' },

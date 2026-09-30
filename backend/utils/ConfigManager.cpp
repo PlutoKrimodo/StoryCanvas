@@ -22,6 +22,7 @@ int ConfigManager::jwtRefreshTokenExpiry = 604800;
 
 std::string ConfigManager::aiServiceUrl = "http://localhost:8000";
 std::string ConfigManager::aiServiceApiKey;
+int ConfigManager::aiServiceTimeout = 180;
 
 std::string ConfigManager::corsOrigins = "http://localhost:5173";
 std::string ConfigManager::encryptionKey;
@@ -169,6 +170,9 @@ void ConfigManager::applyEnv() {
 
     aiServiceUrl = resolve("AI_SERVICE_URL", "ai_service", "url", "http://localhost:8000");
     aiServiceApiKey = resolve("AI_SERVICE_API_KEY", "ai_service", "api_key", "");
+    // 图像生成可能耗时 10-120s，默认放宽到 180s，避免正常生成被误判超时
+    aiServiceTimeout =
+        toInt(resolve("AI_SERVICE_TIMEOUT", "ai_service", "timeout", "180"), 180);
 
     corsOrigins = resolve("CORS_ORIGINS", "cors", "allowed_origins", "http://localhost:5173");
     encryptionKey = resolve("ENCRYPTION_KEY", "security", "encryption_key", "");
