@@ -6,6 +6,7 @@ AI 服务保持**无状态**（任务状态由 C++ 后端持有并落库，见 d
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, Optional
 
 from ..models.schemas import (
@@ -26,6 +27,9 @@ from .text_analyzer import TextAnalyzerService
 # 尺寸合法区间（防止恶意/异常参数拖垮生成）
 _MIN_SIZE = 256
 _MAX_SIZE = 2048
+# 真实厂商（豆包 Seedream）要求图片面积不低于 921600 像素（约 1280x720），
+# 低于该值会直接返回 400 InvalidParameter，故此处做等比放大兜底。
+_MIN_AREA = 921600
 
 
 class GenerationService(BaseService):
@@ -64,7 +68,16 @@ class GenerationService(BaseService):
                 return default
             return max(_MIN_SIZE, min(number, _MAX_SIZE))
 
-        return clamp(width, 1024), clamp(height, 1024)
+        width = clamp(width, 1024)
+        height = clamp(height, 1024)
+
+        # 面积兜底：过小的尺寸真实厂商会拒绝（400），按比例放大到合规区间
+        if width * height < _MIN_AREA:
+            scale = math.sqrt(_MIN_AREA / (width * height)) * 1.02  # 留 2% 余量
+            width = min(_MAX_SIZE, int(math.ceil(width * scale / 8) * 8))
+            height = min(_MAX_SIZE, int(math.ceil(height * scale / 8) * 8))
+
+        return width, height
 
     async def generate(
         self,

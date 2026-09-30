@@ -11,7 +11,7 @@ def test_generate_image_and_persist(client: TestClient, storage_root):
             "style": "cartoon",
             "user_id": "u-1",
             "book_id": "b-1",
-            "parameters": {"width": 256, "height": 256},
+            "parameters": {"size": "1024x1024"},
         },
     )
     assert resp.status_code == 200
@@ -23,7 +23,7 @@ def test_generate_image_and_persist(client: TestClient, storage_root):
 
     image = body["image"]
     assert image["file_path"].startswith("users/u-1/books/b-1/images/generated/")
-    assert image["width"] == 256 and image["height"] == 256
+    assert image["width"] == 1024 and image["height"] == 1024
     assert image["file_size"] > 0
 
     saved = storage_root / image["file_path"]
@@ -37,8 +37,10 @@ def test_generate_defaults_book_to_unassigned(client: TestClient, storage_root):
         json={"text": "一只小猫", "parameters": {"size": "16x16"}},
     )
     assert resp.status_code == 200
-    file_path = resp.json()["image"]["file_path"]
-    assert "unassigned" in file_path
+    image = resp.json()["image"]
+    assert "unassigned" in image["file_path"]
+    # 面积兜底：16x16 远低于真实厂商最小面积（921600），应被等比放大而非报错
+    assert image["width"] * image["height"] >= 921600
 
 
 def test_generate_rejects_empty_text(client: TestClient):

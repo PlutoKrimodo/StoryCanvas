@@ -31,12 +31,17 @@ export const TASK_STATUS_COLOR: Record<string, string> = {
   cancelled: 'default',
 }
 
-/** 生成图尺寸可选项（与后端 _resolve_size 的 256~2048 约束一致） */
+/**
+ * 生成图尺寸可选项。
+ *
+ * 真实厂商（豆包 Seedream）要求图片面积 ≥ 921600 像素，低于该值会返回
+ * 400 InvalidParameter（实测 768x768 / 1024x768 / 768x1024 均被拒绝，
+ * 1024x1024 / 1280x768 / 768x1280 可用），因此只保留合规档位。
+ */
 export const IMAGE_SIZE_OPTIONS = [
-  { value: '768x768', label: '768 × 768（方形·较快）' },
   { value: '1024x1024', label: '1024 × 1024（方形·推荐）' },
-  { value: '1024x768', label: '1024 × 768（横向）' },
-  { value: '768x1024', label: '768 × 1024（纵向·绘本页）' },
+  { value: '1280x768', label: '1280 × 768（横向）' },
+  { value: '768x1280', label: '768 × 1280（纵向·绘本页）' },
 ] as const
 
 /** 单本绘本页数上限（与后端 SavePageRequest 校验、PDF 导出上限保持一致） */
