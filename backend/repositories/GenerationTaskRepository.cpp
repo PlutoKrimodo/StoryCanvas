@@ -66,11 +66,14 @@ bool GenerationTaskRepository::updateResult(GenerationTask &task) {
             task.parsedData.has_value() ? task.parsedData->dump() : std::string();
 
         auto result = db->execSqlSync(
+            // $1 在 status 赋值与 CASE 比较中各出现一次：不显式转换时 PostgreSQL 会分别
+            // 推断为 varchar 与 text，报 "inconsistent types deduced for parameter $1"，
+            // 导致任务状态永远写不回去（前端表现为进度卡在 processing）。两处统一转 text。
             "UPDATE generation_tasks SET "
-            "status = $1, prompt = $2, parsed_data = NULLIF($3, '')::jsonb, "
+            "status = $1::text, prompt = $2, parsed_data = NULLIF($3, '')::jsonb, "
             "result_url = NULLIF($4, ''), error_message = NULLIF($5, ''), "
             "model_used = NULLIF($6, ''), "
-            "completed_at = CASE WHEN $1 IN ('completed', 'failed', 'cancelled') "
+            "completed_at = CASE WHEN $1::text IN ('completed', 'failed', 'cancelled') "
             "                    THEN CURRENT_TIMESTAMP ELSE completed_at END "
             "WHERE id = $7 "
             "RETURNING updated_at::text, completed_at::text",
