@@ -9,10 +9,6 @@
 
 namespace {
 
-// 单本绘本路径前缀与页后缀：/api/v1/books/{book_id}/pages
-const std::string kBookPrefix = "/api/v1/books/";
-const std::string kPagesSuffix = "/pages";
-
 json parseBody(const HttpRequestPtr &req) {
     try {
         auto body = req->getBody();
@@ -28,24 +24,6 @@ drogon::HttpResponsePtr sendJson(int code, const json &body) {
     return ApiResponse::ok(body, static_cast<drogon::HttpStatusCode>(code));
 }
 
-bool isPagesPath(const std::string &path) {
-    if (path.rfind(kBookPrefix, 0) != 0) {
-        return false;
-    }
-    if (path.size() <= kBookPrefix.size() + kPagesSuffix.size()) {
-        return false;
-    }
-    return path.compare(path.size() - kPagesSuffix.size(), kPagesSuffix.size(), kPagesSuffix) == 0;
-}
-
-std::string extractBookId(const std::string &path) {
-    if (!isPagesPath(path)) {
-        return "";
-    }
-    const size_t end = path.size() - kPagesSuffix.size();
-    return path.substr(kBookPrefix.size(), end - kBookPrefix.size());
-}
-
 json validationErrors(const std::vector<FieldError> &errors) {
     json arr = json::array();
     for (const auto &err : errors) {
@@ -56,39 +34,16 @@ json validationErrors(const std::vector<FieldError> &errors) {
 
 }  // namespace
 
-void PageController::asyncHandleHttpRequest(
-    const HttpRequestPtr &req,
-    std::function<void(const HttpResponsePtr &)> &&callback) {
-
-    const std::function<void(const HttpResponsePtr &)> fallback = callback;
-
-    try {
-        const auto path = req->getPath();
-        const auto method = req->getMethod();
-
-        if (isPagesPath(path)) {
-            if (method == Post) {
-                savePage(req, std::move(callback));
-            } else if (method == Get) {
-                listPages(req, std::move(callback));
-            } else {
-                fallback(ApiResponse::fail(404, "接口不存在"));
-            }
-        } else {
-            fallback(ApiResponse::fail(404, "接口不存在"));
-        }
-    } catch (const std::exception &e) {
-        spdlog::error("页容器接口异常: path={}, what={}", req->getPath(), e.what());
-        fallback(ApiResponse::fail(500, "服务内部错误"));
-    }
-}
+// ==================== 处理函数 ====================
+// 路由由 PageController.h 的 ADD_METHOD_TO 直接分发；
+// 路径参数 bookId 由 Drogon 依据 {1} 解析后传入。
 
 void PageController::savePage(
     const HttpRequestPtr &req,
-    std::function<void(const HttpResponsePtr &)> &&callback) {
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    std::string bookId) {
 
     auto userId = req->getAttributes()->get<std::string>("user_id");
-    const std::string bookId = extractBookId(req->getPath());
 
     auto body = parseBody(req);
     if (body.is_null()) {
@@ -113,10 +68,10 @@ void PageController::savePage(
 
 void PageController::listPages(
     const HttpRequestPtr &req,
-    std::function<void(const HttpResponsePtr &)> &&callback) {
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    std::string bookId) {
 
     auto userId = req->getAttributes()->get<std::string>("user_id");
-    const std::string bookId = extractBookId(req->getPath());
 
     auto result = PageService::listPages(userId, bookId);
     if (result.success) {

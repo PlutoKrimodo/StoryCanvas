@@ -1,30 +1,40 @@
 #pragma once
 
-#include <drogon/HttpSimpleController.h>
+#include <drogon/HttpController.h>
 
 using namespace drogon;
 
-class BookController : public drogon::HttpSimpleController<BookController> {
+/**
+ * 绘本接口（docs/04 §4）。
+ *
+ * 路由注册必须用 HttpController + ADD_METHOD_TO（原因见 GenerationController.h 注释）：
+ * HttpSimpleController 的 PATH_ADD 只做精确路径匹配，{book_id} 不会命中真实请求。
+ * {1} 必须对应 handler 的一个参数，否则启动即 exit(1)。
+ */
+class BookController : public drogon::HttpController<BookController> {
 public:
-    void asyncHandleHttpRequest(
-        const HttpRequestPtr &req,
-        std::function<void(const HttpResponsePtr &)> &&callback) override;
+    METHOD_LIST_BEGIN
+    ADD_METHOD_TO(BookController::createBook, "/api/v1/books", Post, "JwtFilter");
+    ADD_METHOD_TO(BookController::listMyBooks, "/api/v1/users/me/books", Get, "JwtFilter");
+    ADD_METHOD_TO(BookController::getBook, "/api/v1/books/{1}", Get, "JwtFilter");
+    ADD_METHOD_TO(BookController::updateBook, "/api/v1/books/{1}", Put, "JwtFilter");
+    ADD_METHOD_TO(BookController::deleteBook, "/api/v1/books/{1}", Delete, "JwtFilter");
+    METHOD_LIST_END
 
     static void init() {}
     static void shutdown() {}
 
-    PATH_LIST_BEGIN
-    PATH_ADD("/api/v1/books", Post, "JwtFilter");
-    PATH_ADD("/api/v1/users/me/books", Get, "JwtFilter");
-    PATH_ADD("/api/v1/books/{book_id}", Get, "JwtFilter");
-    PATH_ADD("/api/v1/books/{book_id}", Put, "JwtFilter");
-    PATH_ADD("/api/v1/books/{book_id}", Delete, "JwtFilter");
-    PATH_LIST_END
-
-private:
-    void createBook(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback);
-    void listMyBooks(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback);
-    void getBook(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback);
-    void updateBook(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback);
-    void deleteBook(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback);
+    void createBook(const HttpRequestPtr &req,
+                    std::function<void(const HttpResponsePtr &)> &&callback);
+    void listMyBooks(const HttpRequestPtr &req,
+                     std::function<void(const HttpResponsePtr &)> &&callback);
+    void getBook(const HttpRequestPtr &req,
+                 std::function<void(const HttpResponsePtr &)> &&callback,
+                 std::string bookId);
+    void updateBook(const HttpRequestPtr &req,
+                    std::function<void(const HttpResponsePtr &)> &&callback,
+                    std::string bookId);
+    void deleteBook(const HttpRequestPtr &req,
+                    std::function<void(const HttpResponsePtr &)> &&callback,
+                    std::string bookId);
 };

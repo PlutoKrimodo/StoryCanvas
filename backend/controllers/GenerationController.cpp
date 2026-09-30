@@ -9,8 +9,6 @@
 
 namespace {
 
-const std::string kPrefix = "/api/v1/generation/";
-
 json parseBody(const HttpRequestPtr &req) {
     try {
         auto body = req->getBody();
@@ -43,53 +41,12 @@ json validationErrors(const std::vector<FieldError> &errors) {
     return arr;
 }
 
-/** 去掉末尾的 `/<suffix>`，返回任务 ID；不匹配则返回空串。 */
-std::string taskIdWithSuffix(const std::string &rest, const std::string &suffix) {
-    const std::string tail = "/" + suffix;
-    if (rest.size() > tail.size() && rest.compare(rest.size() - tail.size(), tail.size(), tail) == 0) {
-        return rest.substr(0, rest.size() - tail.size());
-    }
-    return "";
-}
-
 }  // namespace
 
-void GenerationController::asyncHandleHttpRequest(
-    const HttpRequestPtr &req,
-    std::function<void(const HttpResponsePtr &)> &&callback) {
-
-    const std::function<void(const HttpResponsePtr &)> fallback = callback;
-
-    try {
-        const auto path = req->getPath();
-        const auto method = req->getMethod();
-
-        if (path == "/api/v1/generation" && method == Post) {
-            createTask(req, std::move(callback));
-        } else if (path == "/api/v1/generation/history" && method == Get) {
-            listHistory(req, std::move(callback));
-        } else if (path.rfind(kPrefix, 0) == 0) {
-            const std::string rest = path.substr(kPrefix.size());
-            const std::string cancelId = taskIdWithSuffix(rest, "cancel");
-            const std::string regenerateId = taskIdWithSuffix(rest, "regenerate");
-
-            if (!cancelId.empty() && method == Post) {
-                cancelTask(req, std::move(callback));
-            } else if (!regenerateId.empty() && method == Post) {
-                regenerate(req, std::move(callback));
-            } else if (method == Get) {
-                getTask(req, std::move(callback));
-            } else {
-                fallback(ApiResponse::fail(404, "接口不存在"));
-            }
-        } else {
-            fallback(ApiResponse::fail(404, "接口不存在"));
-        }
-    } catch (const std::exception &e) {
-        spdlog::error("生成接口异常: path={}, what={}", req->getPath(), e.what());
-        fallback(ApiResponse::fail(500, "服务内部错误"));
-    }
-}
+// ==================== 处理函数 ====================
+// 路由由 GenerationController.h 的 ADD_METHOD_TO 直接分发到下列方法；
+// 路径参数 taskId 由 Drogon 依据 {1} 解析后传入，无需再从 req->getPath() 手工截取。
+// 处理器抛出的异常由 Drogon 的 HttpBinder 统一兜底（返回 500）。
 
 void GenerationController::createTask(
     const HttpRequestPtr &req,
@@ -119,21 +76,6 @@ void GenerationController::createTask(
     }
 }
 
-void GenerationController::getTask(
-    const HttpRequestPtr &req,
-    std::function<void(const HttpResponsePtr &)> &&callback) {
-
-    auto userId = req->getAttributes()->get<std::string>("user_id");
-    const std::string taskId = req->getPath().substr(kPrefix.size());
-
-    auto result = GenerationService::getTask(userId, taskId);
-    if (result.success) {
-        callback(sendJson(result.code, ApiResponse::success(result.message, result.data)));
-    } else {
-        callback(sendJson(result.code, ApiResponse::error(result.code, result.message)));
-    }
-}
-
 void GenerationController::listHistory(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback) {
@@ -152,12 +94,27 @@ void GenerationController::listHistory(
     }
 }
 
-void GenerationController::cancelTask(
+void GenerationController::getTask(
     const HttpRequestPtr &req,
-    std::function<void(const HttpResponsePtr &)> &&callback) {
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    std::string taskId) {
 
     auto userId = req->getAttributes()->get<std::string>("user_id");
-    const std::string taskId = taskIdWithSuffix(req->getPath().substr(kPrefix.size()), "cancel");
+
+    auto result = GenerationService::getTask(userId, taskId);
+    if (result.success) {
+        callback(sendJson(result.code, ApiResponse::success(result.message, result.data)));
+    } else {
+        callback(sendJson(result.code, ApiResponse::error(result.code, result.message)));
+    }
+}
+
+void GenerationController::cancelTask(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    std::string taskId) {
+
+    auto userId = req->getAttributes()->get<std::string>("user_id");
 
     auto result = GenerationService::cancelTask(userId, taskId);
     if (result.success) {
@@ -169,12 +126,11 @@ void GenerationController::cancelTask(
 
 void GenerationController::regenerate(
     const HttpRequestPtr &req,
-    std::function<void(const HttpResponsePtr &)> &&callback) {
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    std::string taskId) {
 
     auto userId = req->getAttributes()->get<std::string>("user_id");
     const bool isGuest = req->getAttributes()->get<bool>("is_guest");
-    const std::string taskId =
-        taskIdWithSuffix(req->getPath().substr(kPrefix.size()), "regenerate");
 
     auto body = parseBody(req);
     auto regenReq = RegenerateRequest::fromJson(body.is_null() ? json::object() : body);

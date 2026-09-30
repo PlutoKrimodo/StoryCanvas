@@ -1,14 +1,12 @@
 #include "BookController.h"
-#include "../dto/BookDto.h"
+
 #include "../dto/ApiResponse.h"
+#include "../dto/BookDto.h"
 #include "../services/BookService.h"
 #include <drogon/HttpResponse.h>
 #include <spdlog/spdlog.h>
 
 namespace {
-
-// 单本绘本路径前缀：/api/v1/books/{book_id}
-const std::string kBookPrefix = "/api/v1/books/";
 
 json parseBody(const HttpRequestPtr &req) {
     try {
@@ -23,14 +21,6 @@ json parseBody(const HttpRequestPtr &req) {
 
 drogon::HttpResponsePtr sendJson(int code, const json &body) {
     return ApiResponse::ok(body, static_cast<drogon::HttpStatusCode>(code));
-}
-
-bool isBookDetailPath(const std::string &path) {
-    return path.rfind(kBookPrefix, 0) == 0 && path.size() > kBookPrefix.size();
-}
-
-std::string extractBookId(const std::string &path) {
-    return isBookDetailPath(path) ? path.substr(kBookPrefix.size()) : std::string();
 }
 
 int toInt(const std::string &value, int defaultValue) {
@@ -52,35 +42,9 @@ json validationErrors(const std::vector<FieldError> &errors) {
 
 }  // namespace
 
-void BookController::asyncHandleHttpRequest(
-    const HttpRequestPtr &req,
-    std::function<void(const HttpResponsePtr &)> &&callback) {
-
-    // 分发时会把 callback move 进各处理函数，故先保留一份副本用于异常兜底
-    const std::function<void(const HttpResponsePtr &)> fallback = callback;
-
-    try {
-        const auto path = req->getPath();
-        const auto method = req->getMethod();
-
-        if (path == "/api/v1/books" && method == Post) {
-            createBook(req, std::move(callback));
-        } else if (path == "/api/v1/users/me/books" && method == Get) {
-            listMyBooks(req, std::move(callback));
-        } else if (isBookDetailPath(path) && method == Get) {
-            getBook(req, std::move(callback));
-        } else if (isBookDetailPath(path) && method == Put) {
-            updateBook(req, std::move(callback));
-        } else if (isBookDetailPath(path) && method == Delete) {
-            deleteBook(req, std::move(callback));
-        } else {
-            fallback(ApiResponse::fail(404, "接口不存在"));
-        }
-    } catch (const std::exception &e) {
-        spdlog::error("绘本接口异常: path={}, what={}", req->getPath(), e.what());
-        fallback(ApiResponse::fail(500, "服务内部错误"));
-    }
-}
+// ==================== 处理函数 ====================
+// 路由由 BookController.h 的 ADD_METHOD_TO 直接分发；
+// 路径参数 bookId 由 Drogon 依据 {1} 解析后传入。
 
 void BookController::createBook(
     const HttpRequestPtr &req,
@@ -133,10 +97,10 @@ void BookController::listMyBooks(
 
 void BookController::getBook(
     const HttpRequestPtr &req,
-    std::function<void(const HttpResponsePtr &)> &&callback) {
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    std::string bookId) {
 
     auto userId = req->getAttributes()->get<std::string>("user_id");
-    const std::string bookId = extractBookId(req->getPath());
 
     auto result = BookService::getBook(userId, bookId);
     if (result.success) {
@@ -148,10 +112,10 @@ void BookController::getBook(
 
 void BookController::updateBook(
     const HttpRequestPtr &req,
-    std::function<void(const HttpResponsePtr &)> &&callback) {
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    std::string bookId) {
 
     auto userId = req->getAttributes()->get<std::string>("user_id");
-    const std::string bookId = extractBookId(req->getPath());
 
     auto body = parseBody(req);
     if (body.is_null()) {
@@ -176,10 +140,10 @@ void BookController::updateBook(
 
 void BookController::deleteBook(
     const HttpRequestPtr &req,
-    std::function<void(const HttpResponsePtr &)> &&callback) {
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    std::string bookId) {
 
     auto userId = req->getAttributes()->get<std::string>("user_id");
-    const std::string bookId = extractBookId(req->getPath());
 
     auto result = BookService::deleteBook(userId, bookId);
     if (result.success) {
