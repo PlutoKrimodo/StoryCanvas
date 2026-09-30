@@ -100,6 +100,42 @@ export async function ensureGuestToken(): Promise<string> {
   return guestPromise
 }
 
+/**
+ * 游客会话重建的最小间隔（毫秒）。
+ *
+ * 后端每次 `POST /auth/guest` 都会**新建一个影子游客用户**，因此这里必须限流，
+ * 否则 Token 持续失效时（高频轮询场景）会在 users 表里批量堆出游客账号。
+ */
+const GUEST_RESESSION_COOLDOWN_MS = 60_000
+/** 上次成功重建游客会话的时间戳 */
+let lastGuestSessionAt = 0
+/** 单飞（single-flight）：并发 401 时只重建一次游客会话 */
+let guestResessionPromise: Promise<string> | null = null
+
+/**
+ * 重建游客会话（带单飞与冷却）。
+ *
+ * 与 `ensureGuestToken` 的区别：本函数会先丢弃已确认失效的旧 Token，
+ * 并受冷却窗口限制，冷却期内直接失败（不调后端），避免高频创建游客账号。
+ */
+async function resessionGuest(): Promise<string> {
+  if (!guestResessionPromise) {
+    guestResessionPromise = (async () => {
+      // 无论是否重建，都先把已失效的 Token 清掉，避免继续拿它发请求
+      useAuthStore.getState().setGuest(null)
+      if (Date.now() - lastGuestSessionAt < GUEST_RESESSION_COOLDOWN_MS) {
+        throw new Error('游客会话重建过于频繁，本次跳过')
+      }
+      const token = await ensureGuestToken()
+      lastGuestSessionAt = Date.now()
+      return token
+    })().finally(() => {
+      guestResessionPromise = null
+    })
+  }
+  return guestResessionPromise
+}
+
 client.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError<ApiResponse>) => {
@@ -130,10 +166,18 @@ client.interceptors.response.use(
       }
 
       if (guestToken) {
-        // 游客：Token 可能已过期 / 被撤销，清掉旧 Token 重建会话后重试一次
-        try {
+        // 静默请求（后台轮询）不重建游客会话：它频率高且非用户触发，
+        // 若每次 401 都调 POST /auth/guest，后端会不断新建影子游客用户。
+        // 这里只丢弃失效 Token，等下一次用户操作（如点击生成）时自然重建。
+        if (original.silent) {
           useAuthStore.getState().setGuest(null)
-          const token = await ensureGuestToken()
+          return Promise.reject(error)
+        }
+
+        // 用户触发的请求：Token 可能已过期 / 被撤销，重建会话后重试一次。
+        // 重建受单飞与冷却保护，避免 401 风暴批量创建游客账号。
+        try {
+          const token = await resessionGuest()
           original.headers.Authorization = `Bearer ${token}`
           return client(original)
         } catch {
