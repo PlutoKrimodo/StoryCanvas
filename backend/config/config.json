@@ -22,7 +22,11 @@
   "jwt": {
     "secret": "",
     "access_token_expiry": 3600,
-    "refresh_token_expiry": 604800
+    "refresh_token_expiry": 604800,
+    "guest_token_expiry": 604800
+  },
+  "guest": {
+    "generation_quota": 1
   },
   "ai_service": {
     "url": "http://localhost:8000",

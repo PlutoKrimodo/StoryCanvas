@@ -18,6 +18,9 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     avatar VARCHAR(500),
     is_active BOOLEAN DEFAULT true,
+    -- Guest-first：游客以「影子用户」存在（user_id 外键仍 NOT NULL，沿用全部归属校验），
+    -- 注册/登录后通过「认领」把生成结果归属转移到真实用户（见 docs/TODO.md T-1 能力层）
+    is_guest BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

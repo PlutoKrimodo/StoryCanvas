@@ -10,6 +10,7 @@
 #include "../repositories/BookRepository.h"
 #include "../repositories/GeneratedImageRepository.h"
 #include "../repositories/GenerationTaskRepository.h"
+#include "../utils/ConfigManager.h"
 #include "AiServiceClient.h"
 
 // ==================== 静态成员定义 ====================
@@ -47,6 +48,28 @@ ServiceResult conflict(const std::string &message) {
     result.code = 409;
     result.message = message;
     return result;
+}
+
+/**
+ * 游客配额校验：统计该游客「进行中 + 已完成」的任务数，达到上限即拒绝（429）。
+ * 非游客不限制。
+ */
+bool checkGuestQuota(const std::string &userId, bool isGuest, ServiceResult &result) {
+    if (!isGuest) {
+        return true;
+    }
+    const int used =
+        GenerationTaskRepository::countByUserAndStatus(userId, "pending") +
+        GenerationTaskRepository::countByUserAndStatus(userId, "processing") +
+        GenerationTaskRepository::countByUserAndStatus(userId, "completed");
+    if (used >= ConfigManager::guestGenerationQuota) {
+        result.code = 429;
+        result.message = "游客免费额度已用完（共 " +
+                         std::to_string(ConfigManager::guestGenerationQuota) +
+                         " 张），登录后可继续生成";
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -222,8 +245,14 @@ void GenerationService::processTask(const std::string &taskId) {
 
 // ==================== 业务接口 ====================
 ServiceResult GenerationService::createTask(const std::string &userId,
+                                            bool isGuest,
                                             const CreateGenerationRequest &req) {
     ServiceResult result;
+
+    // 0. 游客配额校验（用尽返回 429）
+    if (!checkGuestQuota(userId, isGuest, result)) {
+        return result;
+    }
 
     // 1. 归属校验（可选绑定绘本 / 页）
     if (!req.bookId.empty() && !ensureBookOwnership(userId, req.bookId, result)) {
@@ -347,9 +376,15 @@ ServiceResult GenerationService::cancelTask(const std::string &userId,
 }
 
 ServiceResult GenerationService::regenerate(const std::string &userId,
+                                            bool isGuest,
                                             const std::string &taskId,
                                             const RegenerateRequest &req) {
     ServiceResult result;
+
+    // 重新生成同样消耗一张游客额度
+    if (!checkGuestQuota(userId, isGuest, result)) {
+        return result;
+    }
 
     auto origin = GenerationTaskRepository::findById(taskId);
     if (!origin.has_value()) {

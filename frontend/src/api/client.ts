@@ -3,7 +3,7 @@ import { message } from 'antd'
 
 import { useAuthStore } from '../stores/authStore'
 import type { ApiResponse } from '../types/api'
-import type { RefreshResponse } from '../types/auth'
+import type { GuestSession, RefreshResponse } from '../types/auth'
 
 /**
  * 使用相对路径，开发环境由 Vite 代理转发到后端（见 vite.config.ts），
@@ -21,9 +21,11 @@ const client = axios.create({
 
 client.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const { accessToken } = useAuthStore.getState()
-    if (accessToken) {
-      config.headers.Authorization = `Bearer ${accessToken}`
+    const { accessToken, guestToken } = useAuthStore.getState()
+    // 已登录用 Access Token；未登录（游客）用游客 Token
+    const token = accessToken ?? guestToken
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },
@@ -32,6 +34,8 @@ client.interceptors.request.use(
 
 /** 单飞（single-flight）：并发 401 时只触发一次刷新 */
 let refreshPromise: Promise<string> | null = null
+/** 单飞（single-flight）：并发触发游客会话创建时只请求一次 */
+let guestPromise: Promise<string> | null = null
 
 async function refreshAccessToken(): Promise<string> {
   const { refreshToken } = useAuthStore.getState()
@@ -59,6 +63,30 @@ async function refreshAccessToken(): Promise<string> {
   return data.data.access_token
 }
 
+/** 获取（或创建）游客会话 Token，供未登录用户调用生成等受保护接口 */
+export async function ensureGuestToken(): Promise<string> {
+  const { guestToken } = useAuthStore.getState()
+  if (guestToken) {
+    return guestToken
+  }
+
+  if (!guestPromise) {
+    guestPromise = axios
+      .post<ApiResponse<GuestSession>>(`${BASE_URL}/auth/guest`)
+      .then(({ data }) => {
+        if (!data.data) {
+          throw new Error(data.message || '创建游客会话失败')
+        }
+        useAuthStore.getState().setGuest(data.data)
+        return data.data.guest_token
+      })
+      .finally(() => {
+        guestPromise = null
+      })
+  }
+  return guestPromise
+}
+
 client.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError<ApiResponse>) => {
@@ -66,21 +94,38 @@ client.interceptors.response.use(
 
     if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true
-      try {
-        if (!refreshPromise) {
-          refreshPromise = refreshAccessToken().finally(() => {
-            refreshPromise = null
-          })
+      const { isAuthenticated, refreshToken, guestToken } = useAuthStore.getState()
+
+      if (isAuthenticated || refreshToken) {
+        // 真实用户：刷新 Access Token 后重试
+        try {
+          if (!refreshPromise) {
+            refreshPromise = refreshAccessToken().finally(() => {
+              refreshPromise = null
+            })
+          }
+          const token = await refreshPromise
+          original.headers.Authorization = `Bearer ${token}`
+          return client(original)
+        } catch {
+          useAuthStore.getState().logout()
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login'
+          }
+          return Promise.reject(error)
         }
-        const token = await refreshPromise
-        original.headers.Authorization = `Bearer ${token}`
-        return client(original)
-      } catch {
-        useAuthStore.getState().logout()
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login'
+      }
+
+      if (guestToken) {
+        // 游客：Token 可能已过期 / 被撤销，清掉旧 Token 重建会话后重试一次
+        try {
+          useAuthStore.getState().setGuest(null)
+          const token = await ensureGuestToken()
+          original.headers.Authorization = `Bearer ${token}`
+          return client(original)
+        } catch {
+          return Promise.reject(error)
         }
-        return Promise.reject(error)
       }
     }
 

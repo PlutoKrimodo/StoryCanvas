@@ -19,6 +19,9 @@ std::string ConfigManager::dbPassword;
 std::string ConfigManager::jwtSecret;
 int ConfigManager::jwtAccessTokenExpiry = 3600;
 int ConfigManager::jwtRefreshTokenExpiry = 604800;
+int ConfigManager::jwtGuestTokenExpiry = 604800;
+
+int ConfigManager::guestGenerationQuota = 1;
 
 std::string ConfigManager::aiServiceUrl = "http://localhost:8000";
 std::string ConfigManager::aiServiceApiKey;
@@ -167,6 +170,11 @@ void ConfigManager::applyEnv() {
         toInt(resolve("JWT_ACCESS_TOKEN_EXPIRY", "jwt", "access_token_expiry", "3600"), 3600);
     jwtRefreshTokenExpiry =
         toInt(resolve("JWT_REFRESH_TOKEN_EXPIRY", "jwt", "refresh_token_expiry", "604800"), 604800);
+    jwtGuestTokenExpiry =
+        toInt(resolve("JWT_GUEST_TOKEN_EXPIRY", "jwt", "guest_token_expiry", "604800"), 604800);
+
+    guestGenerationQuota =
+        toInt(resolve("GUEST_GENERATION_QUOTA", "guest", "generation_quota", "1"), 1);
 
     aiServiceUrl = resolve("AI_SERVICE_URL", "ai_service", "url", "http://localhost:8000");
     aiServiceApiKey = resolve("AI_SERVICE_API_KEY", "ai_service", "api_key", "");

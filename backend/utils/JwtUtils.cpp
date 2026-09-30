@@ -14,6 +14,7 @@ using json = nlohmann::json;
 std::string JwtUtils::secret_;
 int JwtUtils::accessTokenExpiry_ = 3600;
 int JwtUtils::refreshTokenExpiry_ = 604800;
+int JwtUtils::guestTokenExpiry_ = 604800;
 
 std::mutex JwtUtils::mutex_;
 std::set<std::string> JwtUtils::revokedJtis_;
@@ -40,13 +41,17 @@ std::vector<std::string> splitToken(const std::string &token) {
 
 }  // namespace
 
-void JwtUtils::init(const std::string &secret, int accessTokenExpiry, int refreshTokenExpiry) {
+void JwtUtils::init(const std::string &secret,
+                    int accessTokenExpiry,
+                    int refreshTokenExpiry,
+                    int guestTokenExpiry) {
     if (secret.empty()) {
         throw std::runtime_error("JWT 密钥为空，请通过 JWT_SECRET 环境变量注入");
     }
     secret_ = secret;
     accessTokenExpiry_ = accessTokenExpiry;
     refreshTokenExpiry_ = refreshTokenExpiry;
+    guestTokenExpiry_ = guestTokenExpiry;
 }
 
 std::string JwtUtils::encodeSegment(const std::string &text) {
@@ -61,8 +66,9 @@ std::string JwtUtils::buildToken(const std::string &userId,
                                  const std::string &username,
                                  const std::string &type,
                                  const std::string &jti,
-                                 int expirySeconds) {
-    spdlog::debug("JWT buildToken: type={}", type);
+                                 int expirySeconds,
+                                 bool isGuest) {
+    spdlog::debug("JWT buildToken: type={}, guest={}", type, isGuest);
     const time_t now = std::time(nullptr);
 
     json payload = {
@@ -73,6 +79,9 @@ std::string JwtUtils::buildToken(const std::string &userId,
         {"iat", static_cast<long long>(now)},
         {"exp", static_cast<long long>(now + expirySeconds)},
     };
+    if (isGuest) {
+        payload["guest"] = true;
+    }
 
     const std::string headerSegment = encodeSegment(kHeaderJson);
     const std::string payloadSegment = encodeSegment(payload.dump());
@@ -95,6 +104,15 @@ TokenPair JwtUtils::generateTokenPair(const std::string &userId, const std::stri
     pair.refreshToken = buildToken(userId, username, "refresh",
                                    EncryptionUtils::randomHex(16), refreshTokenExpiry_);
     return pair;
+}
+
+std::string JwtUtils::generateGuestToken(const std::string &userId, const std::string &username) {
+    if (secret_.empty()) {
+        throw std::runtime_error("JwtUtils 未初始化");
+    }
+    // 游客 Token 复用 "access" 类型（便于既有 JwtFilter 校验），但携带 guest 声明
+    return buildToken(userId, username, "access", EncryptionUtils::randomHex(16),
+                      guestTokenExpiry_, /*isGuest=*/true);
 }
 
 std::optional<TokenPayload> JwtUtils::verifyToken(const std::string &token,
@@ -127,6 +145,7 @@ std::optional<TokenPayload> JwtUtils::verifyToken(const std::string &token,
         result.username = payload.value("username", "");
         result.type = payload.value("type", "access");
         result.jti = payload.value("jti", "");
+        result.isGuest = payload.value("guest", false);
         result.issuedAt = payload.at("iat").get<long long>();
         result.expiresAt = payload.at("exp").get<long long>();
     } catch (const std::exception &) {

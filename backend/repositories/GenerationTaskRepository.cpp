@@ -187,6 +187,21 @@ int GenerationTaskRepository::countByStatus(const std::string &status) {
     }
 }
 
+int GenerationTaskRepository::countByUserAndStatus(const std::string &userId,
+                                                   const std::string &status) {
+    try {
+        auto db = drogon::app().getDbClient();
+        auto result = db->execSqlSync(
+            "SELECT COUNT(*)::int AS cnt FROM generation_tasks "
+            "WHERE user_id = $1 AND status = $2",
+            userId, status);
+        return result.empty() ? 0 : result[0]["cnt"].as<int>();
+    } catch (const std::exception &e) {
+        spdlog::error("统计用户任务状态失败: {}", e.what());
+        return 0;
+    }
+}
+
 int GenerationTaskRepository::failStaleTasks() {
     try {
         auto db = drogon::app().getDbClient();

@@ -15,6 +15,7 @@ struct User{
     std::string passwordHash;
     std::optional<std::string> avatar;
     bool isActive = true;
+    bool isGuest = false;  // 影子游客用户（Guest-first 能力层）
     std::string createdAt;
     std::string updatedAt;
 

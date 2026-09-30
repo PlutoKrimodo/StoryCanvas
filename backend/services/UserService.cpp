@@ -1,8 +1,61 @@
 #include "UserService.h"
 #include "../repositories/UserRepository.h"
+#include "../utils/ConfigManager.h"
+#include "../utils/EncryptionUtils.h"
 #include "../utils/JwtUtils.h"
 #include "../utils/PasswordUtils.h"
 #include "spdlog/spdlog.h"
+
+namespace {
+
+/**
+ * 认领游客资源：把游客的生成结果/绘本/角色归属转移到真实用户，并停用游客账号。
+ * 非游客 / 已停用 / 空 ID 一律静默跳过，不影响注册与登录主流程。
+ */
+void claimGuestResources(const std::string &guestId, const std::string &userId) {
+    if (guestId.empty()) {
+        return;
+    }
+    if (!UserRepository::isGuestUser(guestId)) {
+        return;
+    }
+    UserRepository::transferGuestResources(guestId, userId);
+    // 撤销游客 Token，避免认领后仍以游客身份继续生成
+    JwtUtils::revokeAllForUser(guestId);
+    UserRepository::deactivateGuest(guestId);
+}
+
+}  // namespace
+
+ServiceResult UserService::createGuest() {
+    ServiceResult result;
+
+    // 影子游客用户：username / email 用随机后缀保证唯一；密码哈希仅用于满足 NOT NULL，
+    // 游客永远不会通过密码登录
+    const std::string suffix = EncryptionUtils::randomHex(16);
+    User user;
+    user.username = "guest_" + suffix;
+    user.email = "guest_" + suffix + "@local.guest";
+    user.passwordHash = PasswordUtils::hashPassword(EncryptionUtils::randomHex(16));
+    user.isGuest = true;
+
+    if (!UserRepository::create(user)) {
+        result.code = 500;
+        result.message = "创建游客会话失败";
+        return result;
+    }
+
+    GuestSession session;
+    session.guestId = user.id;
+    session.guestToken = JwtUtils::generateGuestToken(user.id, user.username);
+    session.quota = ConfigManager::guestGenerationQuota;
+
+    result.success = true;
+    result.code = 200;
+    result.message = "游客会话创建成功";
+    result.data = session.toJson();
+    return result;
+}
 
 ServiceResult UserService::registerUser(const RegisterRequest &req) {
     ServiceResult result;
@@ -41,6 +94,9 @@ ServiceResult UserService::registerUser(const RegisterRequest &req) {
     authResponse.accessToken = tokenPair.accessToken;
     authResponse.refreshToken = tokenPair.refreshToken;
 
+    // 注册即认领：把游客身份下已生成的图片/绘本转移到新用户
+    claimGuestResources(req.guestId, user.id);
+
     result.success = true;
     result.code = 201;
     result.message = "注册成功";
@@ -76,6 +132,9 @@ ServiceResult UserService::loginUser(const LoginRequest &req) {
     authResponse.user.createdAt = user.createdAt;
     authResponse.accessToken = tokenPair.accessToken;
     authResponse.refreshToken = tokenPair.refreshToken;
+
+    // 登录即认领：把游客身份下已生成的图片/绘本转移到登录用户
+    claimGuestResources(req.guestId, user.id);
 
     result.success = true;
     result.code = 200;

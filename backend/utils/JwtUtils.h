@@ -13,6 +13,7 @@ struct TokenPayload {
     std::string username;
     std::string type;  // "access" | "refresh"
     std::string jti;   // Token 唯一标识，用于撤销
+    bool isGuest = false;  // 是否为游客会话（Guest-first，用于配额控制）
     time_t issuedAt = 0;
     time_t expiresAt = 0;
 };
@@ -41,9 +42,18 @@ struct RefreshResult {
  */
 class JwtUtils {
 public:
-    static void init(const std::string &secret, int accessTokenExpiry, int refreshTokenExpiry);
+    static void init(const std::string &secret,
+                     int accessTokenExpiry,
+                     int refreshTokenExpiry,
+                     int guestTokenExpiry = 604800);
 
     static TokenPair generateTokenPair(const std::string &userId, const std::string &username);
+
+    /**
+     * 签发游客会话 Token（类型仍为 "access"，但携带 `guest: true` 声明，
+     * 使既有 JwtFilter 无需改动即可放行；下游通过载荷区分游客以做配额控制）。
+     */
+    static std::string generateGuestToken(const std::string &userId, const std::string &username);
 
     /** 校验 Token；expectedType 为空表示不校验类型（如刷新场景） */
     static std::optional<TokenPayload> verifyToken(const std::string &token,
@@ -82,11 +92,13 @@ private:
                                   const std::string &username,
                                   const std::string &type,
                                   const std::string &jti,
-                                  int expirySeconds);
+                                  int expirySeconds,
+                                  bool isGuest = false);
 
     static std::string secret_;
     static int accessTokenExpiry_;
     static int refreshTokenExpiry_;
+    static int guestTokenExpiry_;
 
     static std::mutex mutex_;
     static std::set<std::string> revokedJtis_;

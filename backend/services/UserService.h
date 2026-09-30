@@ -10,6 +10,8 @@ using json = nlohmann::json;
 
 class UserService{
 public:
+    //游客会话（Guest-first：创建影子游客并签发游客 Token）
+    static ServiceResult createGuest();
     //注册
     static ServiceResult registerUser(const RegisterRequest& req);
     //登录

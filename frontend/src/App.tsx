@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import ErrorBoundary from './components/common/ErrorBoundary'
+import { ensureGuestToken } from './api/client'
 import BookDetail from './pages/books/BookDetail'
 import BookList from './pages/books/BookList'
 import Generate from './pages/generation/Generate'
@@ -17,6 +18,15 @@ const ProtectedRoute = ({ children }: { children: ReactNode }) => {
 }
 
 function App() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+
+  // Guest-first：未登录时静默创建游客会话，使首页生成器无需登录即可调用受保护接口
+  useEffect(() => {
+    if (!isAuthenticated) {
+      void ensureGuestToken()
+    }
+  }, [isAuthenticated])
+
   return (
     <ErrorBoundary>
       <BrowserRouter>
@@ -25,15 +35,11 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
+          {/* Guest-first：首页与生成页对游客开放（先体验后注册） */}
+          <Route path="/" element={<Home />} />
+          <Route path="/generate" element={<Generate />} />
+
           {/* 受保护路由 */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            }
-          />
           <Route
             path="/profile"
             element={
@@ -42,7 +48,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/books"
             element={
@@ -56,16 +61,6 @@ function App() {
             element={
               <ProtectedRoute>
                 <BookDetail />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* AI 图像生成（Phase 5 核心页面） */}
-          <Route
-            path="/generate"
-            element={
-              <ProtectedRoute>
-                <Generate />
               </ProtectedRoute>
             }
           />

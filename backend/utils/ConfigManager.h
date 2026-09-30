@@ -28,6 +28,10 @@ public:
     static std::string jwtSecret;
     static int jwtAccessTokenExpiry;
     static int jwtRefreshTokenExpiry;
+    static int jwtGuestTokenExpiry;  // 游客会话 Token 寿命（秒），需长于普通 Access
+
+    // Guest-first（T-1 能力层）
+    static int guestGenerationQuota;  // 游客可免费生成的图片数（默认 1）
 
     // AI Service
     static std::string aiServiceUrl;

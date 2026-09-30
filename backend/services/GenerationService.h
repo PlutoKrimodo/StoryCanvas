@@ -27,7 +27,10 @@ public:
     static void stop();
 
     // ---- 业务接口 ----
-    static ServiceResult createTask(const std::string &userId, const CreateGenerationRequest &req);
+    // isGuest：请求方是否为游客会话（Guest-first 配额控制）
+    static ServiceResult createTask(const std::string &userId,
+                                    bool isGuest,
+                                    const CreateGenerationRequest &req);
     static ServiceResult getTask(const std::string &userId, const std::string &taskId);
     static ServiceResult listHistory(const std::string &userId,
                                      int page,
@@ -35,6 +38,7 @@ public:
                                      const std::string &bookId);
     static ServiceResult cancelTask(const std::string &userId, const std::string &taskId);
     static ServiceResult regenerate(const std::string &userId,
+                                    bool isGuest,
                                     const std::string &taskId,
                                     const RegenerateRequest &req);
 

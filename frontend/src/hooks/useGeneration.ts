@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { generationApi } from '../api/generation'
+import { ensureGuestToken } from '../api/client'
+import { useAuthStore } from '../stores/authStore'
 import { useGenerationStore } from '../stores/generationStore'
 import {
   TaskStatus,
@@ -106,6 +108,10 @@ export function useGeneration(): UseGenerationResult {
 
   const createTask = useCallback(
     async (payload: GenerationRequest): Promise<TaskResult | null> => {
+      // 游客未登录：先确保游客会话就绪，避免首屏即点生成时 Token 尚未建立
+      if (!useAuthStore.getState().isAuthenticated) {
+        await ensureGuestToken()
+      }
       const { data } = await generationApi.createTask(payload)
       if (!data.data) {
         throw new Error(data.message || '创建生成任务失败')
@@ -125,6 +131,9 @@ export function useGeneration(): UseGenerationResult {
 
   const regenerate = useCallback(
     async (taskId: string, payload?: RegenerateRequest): Promise<TaskResult | null> => {
+      if (!useAuthStore.getState().isAuthenticated) {
+        await ensureGuestToken()
+      }
       const { data } = await generationApi.regenerate(taskId, payload)
       if (!data.data) {
         throw new Error(data.message || '重新生成失败')

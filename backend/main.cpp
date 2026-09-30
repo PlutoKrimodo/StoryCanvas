@@ -32,7 +32,8 @@ int main() {
     // 2. 初始化安全工具
     JwtUtils::init(ConfigManager::jwtSecret,
                    ConfigManager::jwtAccessTokenExpiry,
-                   ConfigManager::jwtRefreshTokenExpiry);
+                   ConfigManager::jwtRefreshTokenExpiry,
+                   ConfigManager::jwtGuestTokenExpiry);
 
     spdlog::set_level(spdlog::level::from_str(ConfigManager::logLevel));
     spdlog::info("密码哈希算法：{}", PasswordUtils::algorithmName());

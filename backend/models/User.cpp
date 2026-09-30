@@ -7,6 +7,7 @@ json User::toJson() const{
         {"email", email},
         {"avatar", avatar.has_value() ? nlohmann::json(*avatar) : nlohmann::json(nullptr)},
         {"is_active", isActive},
+        {"is_guest", isGuest},
         {"created_at", createdAt},
         {"updated_at", updatedAt}
     };
@@ -28,6 +29,9 @@ User User::fromRow(const drogon::orm::Row &row) {
     }
     
     user.isActive = row["is_active"].as<bool>();
+    if (!row["is_guest"].isNull()) {
+        user.isGuest = row["is_guest"].as<bool>();
+    }
     user.createdAt = std::string(row["created_at"].as<std::string_view>());
     user.updatedAt = std::string(row["updated_at"].as<std::string_view>());
     

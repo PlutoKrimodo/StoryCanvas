@@ -42,6 +42,12 @@ export const IMAGE_SIZE_OPTIONS = [
 /** 单本绘本页数上限（与后端 SavePageRequest 校验、PDF 导出上限保持一致） */
 export const MAX_PAGES_PER_BOOK = 50
 
+/**
+ * 游客免费生成额度（前端仅用于展示；真正的额度判断与 429 以后端为准，
+ * 后端默认 GUEST_GENERATION_QUOTA=1，见 .env.example）
+ */
+export const GUEST_GENERATION_LIMIT = 1
+
 /** 绘本状态可选项（与后端 books.status 枚举保持一致） */
 export const BOOK_STATUS_OPTIONS: Array<{ value: BookStatus; label: string }> = [
   { value: 'draft', label: '草稿' },

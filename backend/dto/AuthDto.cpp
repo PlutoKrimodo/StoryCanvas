@@ -6,6 +6,9 @@ RegisterRequest RegisterRequest::fromJson(const json &j){
     if (j.contains("username")) req.username = j["username"].get<std::string>();
     if (j.contains("email")) req.email = j["email"].get<std::string>();
     if (j.contains("password")) req.password = j["password"].get<std::string>();
+    if (j.contains("guest_id") && j["guest_id"].is_string()) {
+        req.guestId = j["guest_id"].get<std::string>();
+    }
     return req;
 }
 
@@ -42,6 +45,9 @@ LoginRequest LoginRequest::fromJson(const json &j) {
     LoginRequest req;
     if (j.contains("email")) req.email = j["email"].get<std::string>();
     if (j.contains("password")) req.password = j["password"].get<std::string>();
+    if (j.contains("guest_id") && j["guest_id"].is_string()) {
+        req.guestId = j["guest_id"].get<std::string>();
+    }
     return req;
 }
 
@@ -88,5 +94,13 @@ json AuthResponse::toJson() const {
         {"user", user.toJson()},
         {"access_token", accessToken},
         {"refresh_token", refreshToken}
+    };
+}
+
+json GuestSession::toJson() const {
+    return {
+        {"guest_id", guestId},
+        {"guest_token", guestToken},
+        {"quota", quota}
     };
 }

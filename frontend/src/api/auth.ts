@@ -1,6 +1,6 @@
 import client from './client'
 import type { ApiResponse } from '../types/api'
-import type { AuthResponse, LoginRequest, RegisterRequest, User } from '../types/auth'
+import type { AuthResponse, GuestSession, LoginRequest, RegisterRequest, User } from '../types/auth'
 
 export interface UpdateUserRequest {
   username?: string
@@ -18,6 +18,9 @@ export const authApi = {
 
   login: (payload: LoginRequest) =>
     client.post<ApiResponse<AuthResponse>>('/auth/login', payload),
+
+  /** 创建游客会话（Guest-first） */
+  createGuest: () => client.post<ApiResponse<GuestSession>>('/auth/guest'),
 
   logout: () => client.post<ApiResponse<null>>('/auth/logout'),
 

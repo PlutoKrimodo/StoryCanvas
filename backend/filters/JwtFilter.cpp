@@ -31,6 +31,7 @@ void JwtFilter::doFilter(const HttpRequestPtr &req, FilterCallback &&fcb, Filter
     auto attributes = req->getAttributes();
     attributes->insert("user_id", payloadOpt->userId);
     attributes->insert("username", payloadOpt->username);
+    attributes->insert("is_guest", payloadOpt->isGuest);
 
     fccb();
 }

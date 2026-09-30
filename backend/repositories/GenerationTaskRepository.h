@@ -32,6 +32,9 @@ public:
     /** 统计某状态的任务数（用于并发控制）。 */
     static int countByStatus(const std::string &status);
 
+    /** 统计某用户指定状态的任务数（游客配额用，status 传 completed）。 */
+    static int countByUserAndStatus(const std::string &userId, const std::string &status);
+
     /** 把长时间处于 pending/processing 的任务标记为 failed（启动自愈）。 */
     static int failStaleTasks();
 };

@@ -33,7 +33,9 @@ void AuthController::asyncHandleHttpRequest(
     try {
         auto path = req->getPath();
 
-        if (path == "/api/v1/auth/register") {
+        if (path == "/api/v1/auth/guest") {
+            createGuest(req, std::move(callback));
+        } else if (path == "/api/v1/auth/register") {
             registerUser(req, std::move(callback));
         } else if (path == "/api/v1/auth/login") {
             loginUser(req, std::move(callback));
@@ -48,6 +50,18 @@ void AuthController::asyncHandleHttpRequest(
         // 兜底：记录异常并返回统一 500，避免 Drogon 直接中断请求
         spdlog::error("认证接口异常: path={}, what={}", req->getPath(), e.what());
         fallback(ApiResponse::fail(500, "服务内部错误"));
+    }
+}
+
+void AuthController::createGuest(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback) {
+
+    auto result = UserService::createGuest();
+    if (result.success) {
+        callback(sendJson(result.code, ApiResponse::success(result.message, result.data)));
+    } else {
+        callback(sendJson(result.code, ApiResponse::error(result.code, result.message)));
     }
 }
 

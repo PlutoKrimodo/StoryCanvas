@@ -7,13 +7,14 @@ bool UserRepository::create(User &user){
         auto db = drogon::app().getDbClient();
         spdlog::debug("执行用户插入: username={}", user.username);
         auto result = db->execSqlSync(
-            "INSERT INTO users (username, email, password_hash, avatar) "
-            "VALUES ($1, $2, $3, $4) "
+            "INSERT INTO users (username, email, password_hash, avatar, is_guest) "
+            "VALUES ($1, $2, $3, $4, $5) "
             "RETURNING id::text, created_at::text, updated_at::text",
             user.username,
             user.email,
             user.passwordHash,
-            user.avatar.value_or("")
+            user.avatar.value_or(""),
+            user.isGuest
         );
 
         if (!result.empty()) {
@@ -35,7 +36,7 @@ std::optional<User> UserRepository::findById(const std::string &id) {
         auto db = drogon::app().getDbClient();
         auto result = db->execSqlSync(
             "SELECT id::text, username, email, password_hash, avatar, "
-            "is_active, created_at::text, updated_at::text FROM users WHERE id = $1",
+            "is_active, is_guest, created_at::text, updated_at::text FROM users WHERE id = $1",
             id
         );
 
@@ -54,7 +55,7 @@ std::optional<User> UserRepository::findByUsername(const std::string &username) 
         auto db = drogon::app().getDbClient();
         auto result = db->execSqlSync(
             "SELECT id::text, username, email, password_hash, avatar, "
-            "is_active, created_at::text, updated_at::text FROM users WHERE username = $1",
+            "is_active, is_guest, created_at::text, updated_at::text FROM users WHERE username = $1",
             username
         );
 
@@ -73,7 +74,7 @@ std::optional<User> UserRepository::findByEmail(const std::string &email) {
         auto db = drogon::app().getDbClient();
         auto result = db->execSqlSync(
             "SELECT id::text, username, email, password_hash, avatar, "
-            "is_active, created_at::text, updated_at::text FROM users WHERE email = $1",
+            "is_active, is_guest, created_at::text, updated_at::text FROM users WHERE email = $1",
             email
         );
 
@@ -144,6 +145,52 @@ bool UserRepository::existsByEmail(const std::string &email) {
         return !result.empty();
     } catch (const std::exception &e) {
         spdlog::error("检查邮箱失败: {}", e.what());
+        return false;
+    }
+}
+
+bool UserRepository::isGuestUser(const std::string &id) {
+    try {
+        auto db = drogon::app().getDbClient();
+        auto result = db->execSqlSync(
+            "SELECT is_guest, is_active FROM users WHERE id = $1", id);
+        if (!result.empty()) {
+            return result[0]["is_guest"].as<bool>() && result[0]["is_active"].as<bool>();
+        }
+        return false;
+    } catch (const std::exception &e) {
+        spdlog::error("查询游客身份失败: {}", e.what());
+        return false;
+    }
+}
+
+void UserRepository::transferGuestResources(const std::string &guestId, const std::string &userId) {
+    if (guestId.empty() || userId.empty() || guestId == userId) {
+        return;
+    }
+    try {
+        auto db = drogon::app().getDbClient();
+        // 依次转移：生成任务、生成图、绘本、角色（book_pages 经 book_id 级联，无需改动）
+        db->execSqlSync("UPDATE generation_tasks SET user_id = $1 WHERE user_id = $2",
+                        userId, guestId);
+        db->execSqlSync("UPDATE generated_images SET user_id = $1 WHERE user_id = $2",
+                        userId, guestId);
+        db->execSqlSync("UPDATE books SET user_id = $1 WHERE user_id = $2", userId, guestId);
+        db->execSqlSync("UPDATE characters SET user_id = $1 WHERE user_id = $2", userId, guestId);
+        spdlog::info("已转移游客资源（图片文件仍位于原相对路径，无需搬动）");
+    } catch (const std::exception &e) {
+        spdlog::error("转移游客资源失败: {}", e.what());
+    }
+}
+
+bool UserRepository::deactivateGuest(const std::string &guestId) {
+    try {
+        auto db = drogon::app().getDbClient();
+        auto result = db->execSqlSync(
+            "UPDATE users SET is_active = false WHERE id = $1 AND is_guest = true", guestId);
+        return result.affectedRows() > 0;
+    } catch (const std::exception &e) {
+        spdlog::error("停用游客账号失败: {}", e.what());
         return false;
     }
 }

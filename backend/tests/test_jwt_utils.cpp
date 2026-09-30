@@ -112,6 +112,26 @@ TEST_F(JwtUtilsTest, RevokeAllForUserInvalidatesEveryTokenOfThatUser) {
     EXPECT_TRUE(JwtUtils::isUserTokenRevoked("user-pwd", std::time(nullptr)));
 }
 
+TEST_F(JwtUtilsTest, GuestTokenIsAccessTypeAndMarkedGuest) {
+    const std::string token = JwtUtils::generateGuestToken("guest-1", "guest_abc");
+    const auto payload = JwtUtils::verifyToken(token, "access");
+
+    ASSERT_TRUE(payload.has_value());
+    EXPECT_EQ(payload->userId, "guest-1");
+    EXPECT_TRUE(payload->isGuest);
+    // 游客 Token 复用 access 类型，便于既有 JwtFilter 直接放行
+    EXPECT_EQ(payload->type, "access");
+    EXPECT_FALSE(JwtUtils::verifyToken(token, "refresh").has_value());
+}
+
+TEST_F(JwtUtilsTest, RegularAccessTokenIsNotGuest) {
+    const TokenPair tokens = JwtUtils::generateTokenPair("user-1", "alice");
+    const auto payload = JwtUtils::verifyToken(tokens.accessToken, "access");
+
+    ASSERT_TRUE(payload.has_value());
+    EXPECT_FALSE(payload->isGuest);
+}
+
 TEST_F(JwtUtilsTest, RevokeAllForUserDoesNotAffectOtherUsers) {
     JwtUtils::revokeAllForUser("user-a");
 

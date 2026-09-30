@@ -96,6 +96,7 @@ void GenerationController::createTask(
     std::function<void(const HttpResponsePtr &)> &&callback) {
 
     auto userId = req->getAttributes()->get<std::string>("user_id");
+    const bool isGuest = req->getAttributes()->get<bool>("is_guest");
 
     auto body = parseBody(req);
     if (body.is_null()) {
@@ -110,7 +111,7 @@ void GenerationController::createTask(
         return;
     }
 
-    auto result = GenerationService::createTask(userId, createReq);
+    auto result = GenerationService::createTask(userId, isGuest, createReq);
     if (result.success) {
         callback(sendJson(result.code, ApiResponse::created(result.message, result.data)));
     } else {
@@ -171,13 +172,14 @@ void GenerationController::regenerate(
     std::function<void(const HttpResponsePtr &)> &&callback) {
 
     auto userId = req->getAttributes()->get<std::string>("user_id");
+    const bool isGuest = req->getAttributes()->get<bool>("is_guest");
     const std::string taskId =
         taskIdWithSuffix(req->getPath().substr(kPrefix.size()), "regenerate");
 
     auto body = parseBody(req);
     auto regenReq = RegenerateRequest::fromJson(body.is_null() ? json::object() : body);
 
-    auto result = GenerationService::regenerate(userId, taskId, regenReq);
+    auto result = GenerationService::regenerate(userId, isGuest, taskId, regenReq);
     if (result.success) {
         callback(sendJson(result.code, ApiResponse::created(result.message, result.data)));
     } else {

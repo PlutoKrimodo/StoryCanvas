@@ -14,7 +14,11 @@ export function useAuth() {
     async (payload: LoginRequest) => {
       setLoading(true)
       try {
-        const { data } = await authApi.login(payload)
+        const { data } = await authApi.login({
+          ...payload,
+          // 携带游客身份，登录后由后端认领游客期间生成的图片
+          guest_id: useAuthStore.getState().guestId ?? undefined,
+        })
         if (!data.data) {
           throw new Error(data.message || '登录失败')
         }
@@ -30,7 +34,11 @@ export function useAuth() {
   const register = useCallback(async (payload: RegisterRequest) => {
     setLoading(true)
     try {
-      const { data } = await authApi.register(payload)
+      const { data } = await authApi.register({
+        ...payload,
+        // 注册后由后端认领游客期间生成的图片
+        guest_id: useAuthStore.getState().guestId ?? undefined,
+      })
       if (!data.data) {
         throw new Error(data.message || '注册失败')
       }

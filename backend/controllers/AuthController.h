@@ -14,6 +14,7 @@ public:
     static void shutdown() {}
 
     PATH_LIST_BEGIN
+    PATH_ADD("/api/v1/auth/guest", Post);
     PATH_ADD("/api/v1/auth/register", Post);
     PATH_ADD("/api/v1/auth/login", Post);
     PATH_ADD("/api/v1/auth/refresh", Post);
@@ -21,6 +22,7 @@ public:
     PATH_LIST_END
 
 private:
+    void createGuest(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback);
     void registerUser(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback);
     void loginUser(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback);
     void refreshToken(const HttpRequestPtr &req, std::function<void(const HttpResponsePtr &)> &&callback);

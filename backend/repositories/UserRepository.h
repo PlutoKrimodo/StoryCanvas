@@ -23,4 +23,13 @@ public:
     static bool existsByUsername(const std::string &username);
     //检查邮箱是否已存在 
     static bool existsByEmail(const std::string &email);
+
+    // 判断用户是否为「活跃的」影子游客（认领前的归属校验）
+    static bool isGuestUser(const std::string &id);
+
+    // 把游客的生成任务/图片/绘本/角色归属转移到真实用户（认领）
+    static void transferGuestResources(const std::string &guestId, const std::string &userId);
+
+    // 停用影子游客账号（认领后不再可用）
+    static bool deactivateGuest(const std::string &guestId);
 };

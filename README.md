@@ -20,6 +20,7 @@ StoryCanvas 是一个基于生成式 AI 的儿童绘本智能创作与图像生�
 - **保存到绘本**: 把生成图按页绑定到绘本（`book_pages.image_id`）
 - **PDF 导出**: 绘本按页合成多页 PDF（含中文页标题）前端生成下载
 - **生成历史**: 历史记录查看与参数复用、多风格选择、尺寸 / 随机种子调优
+- **游客体验（Guest-first）**: 未登录即可生成少量插画（默认 1 张），登录后自动「认领」到账号
 
 > **离线可跑**：AI 服务支持真实厂商（DeepSeek / 豆包·Seedream / 通义万相）与 **Mock 双模式**，
 > 通过 `LLM_PROVIDER` / `IMAGE_PROVIDER` 一键切换；`mock` 会生成真实的 PNG，
@@ -103,6 +104,9 @@ docker-compose up -d postgres redis
 
 # 5. 初始化数据库
 psql -h localhost -U storycanvas -d storycanvas -f sql/init.sql
+
+# 5.5 已有数据库（非全新）需执行增量迁移，补齐游客功能需要的 users.is_guest 列
+psql -h localhost -U storycanvas -d storycanvas -f sql/migrate_guest.sql
 
 # 6. 启动后端（构建产物名为 storycanvas_backend）
 cd backend
@@ -215,10 +219,13 @@ StoryCanvas/
 - 参数调优面板（尺寸 / 随机种子）
 - 单张图片下载
 
+### 范围追加（✅ 已完成，T-1）
+
+- 游客优先（Guest-first）：未登录生成少量图片 + 登录认领（`docs/TODO.md` T-1）
+
 ### 第二阶段（未开始）
 
 - 角色管理与角色一致性生成
-- 游客优先（Guest-first，见 `docs/TODO.md` T-1）
 - Redis 任务队列、并发与性能压测
 
 ---
@@ -239,10 +246,11 @@ cd frontend
 npx tsc --noEmit && npm test
 
 # 端到端验收脚本（需三端已启动）
-./scripts/verify_m1.sh   # Phase 2 用户系统
-./scripts/verify_m2.sh   # Phase 3 绘本管理
-./scripts/verify_m3.sh   # Phase 4 文本解析
-./scripts/verify_m4.sh   # Phase 5 图像生成闭环
+./scripts/verify_m1.sh    # Phase 2 用户系统
+./scripts/verify_m2.sh    # Phase 3 绘本管理
+./scripts/verify_m3.sh    # Phase 4 文本解析
+./scripts/verify_m4.sh    # Phase 5 图像生成闭环
+./scripts/verify_guest.sh # T-1 游客生成 + 认领（能力层）
 ```
 ---
 ## 贡献
