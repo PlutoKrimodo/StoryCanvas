@@ -13,9 +13,14 @@ export const generationApi = {
   createTask: (payload: GenerationRequest) =>
     client.post<ApiResponse<GenerationResponse>>('/generation', payload),
 
-  /** 查询任务状态（前端轮询用） */
+  /**
+   * 查询任务状态（前端轮询用）。
+   *
+   * 标记 `silent`：轮询失败由 useGeneration 自行记录并继续重试，
+   * 不走全局 toast，避免瞬时网络抖动导致连续弹窗。
+   */
   getTask: (taskId: string) =>
-    client.get<ApiResponse<TaskResult>>(`/generation/${taskId}`),
+    client.get<ApiResponse<TaskResult>>(`/generation/${taskId}`, { silent: true }),
 
   /** 生成历史（分页 + 可选按绘本筛选） */
   getHistory: (params?: GenerationHistoryQuery) =>

@@ -6,6 +6,19 @@ import type { ApiResponse } from '../types/api'
 import type { GuestSession, RefreshResponse } from '../types/auth'
 
 /**
+ * 扩展 axios 请求配置。
+ *
+ * `silent: true` 表示该请求失败时不弹全局 toast，交给调用方自行处理。
+ * 用于**后台轮询**这类「失败会被自动重试、且频率高」的请求：
+ * 否则轮询每失败一次就弹一次提示，会连续弹窗刷屏。
+ */
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    silent?: boolean
+  }
+}
+
+/**
  * 使用相对路径，开发环境由 Vite 代理转发到后端（见 vite.config.ts），
  * 生产环境由 Nginx 反向代理，避免硬编码地址导致代理失效。
  */
@@ -129,8 +142,11 @@ client.interceptors.response.use(
       }
     }
 
+    // 静默请求（如后台轮询）不弹全局提示：它会被自动重试，弹窗会连续刷屏。
     // 注意：此处只提示 message，禁止打印请求体（可能含密码）
-    message.error(error.response?.data?.message || '请求失败')
+    if (!original?.silent) {
+      message.error(error.response?.data?.message || '请求失败')
+    }
     return Promise.reject(error)
   },
 )
