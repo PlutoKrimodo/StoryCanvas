@@ -348,10 +348,16 @@ ServiceResult GenerationService::listHistory(const std::string &userId,
     const int offset = (page - 1) * limit;
 
     const auto tasks = GenerationTaskRepository::findByUserId(userId, bookId, limit, offset);
+    if (!tasks.has_value()) {
+        // 查询失败与「确实没有历史」必须区分：前者回 500，前端会弹出明确错误提示
+        result.code = 500;
+        result.message = "查询生成历史失败，请稍后重试";
+        return result;
+    }
     const int total = GenerationTaskRepository::countByUserId(userId, bookId);
 
     json items = json::array();
-    for (const auto &task : tasks) {
+    for (const auto &task : *tasks) {
         items.push_back(task.toJson());
     }
 

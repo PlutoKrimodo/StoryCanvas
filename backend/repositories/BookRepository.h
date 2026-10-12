@@ -14,11 +14,12 @@ public:
     // 按 ID 查找
     static std::optional<Book> findById(const std::string &id);
 
-    // 按用户分页查询（status 为空表示不筛选）
-    static std::vector<Book> findByUserId(const std::string &userId,
-                                          const std::string &status,
-                                          int limit,
-                                          int offset);
+    // 按用户分页查询（status 为空表示不筛选）。
+    // 返回 nullopt 表示「查询失败」，与「确实没有数据」的空列表区分开（服务层转 500）。
+    static std::optional<std::vector<Book>> findByUserId(const std::string &userId,
+                                                         const std::string &status,
+                                                         int limit,
+                                                         int offset);
 
     // 统计用户绘本数量（status 为空表示不筛选）
     static int countByUserId(const std::string &userId, const std::string &status);

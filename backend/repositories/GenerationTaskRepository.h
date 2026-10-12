@@ -20,11 +20,12 @@ public:
     /** 按 ID 查询（含最近一张生成图的派生字段）。 */
     static std::optional<GenerationTask> findById(const std::string &id);
 
-    /** 按用户分页查询（bookId 为空表示不筛选），按创建时间倒序。 */
-    static std::vector<GenerationTask> findByUserId(const std::string &userId,
-                                                    const std::string &bookId,
-                                                    int limit,
-                                                    int offset);
+    /** 按用户分页查询（bookId 为空表示不筛选），按创建时间倒序。
+     *  返回 nullopt 表示「查询失败」，与「确实没有数据」的空列表区分开（服务层转 500）。 */
+    static std::optional<std::vector<GenerationTask>> findByUserId(const std::string &userId,
+                                                                   const std::string &bookId,
+                                                                   int limit,
+                                                                   int offset);
 
     /** 统计用户任务数量（bookId 为空表示不筛选）。 */
     static int countByUserId(const std::string &userId, const std::string &bookId);

@@ -80,19 +80,22 @@ std::optional<GeneratedImage> GeneratedImageRepository::findByIdAndUser(
     }
 }
 
-std::vector<GeneratedImage> GeneratedImageRepository::findByUserId(const std::string &userId,
-                                                                   const std::string &bookId,
-                                                                   int limit,
-                                                                   int offset) {
+std::optional<std::vector<GeneratedImage>> GeneratedImageRepository::findByUserId(
+    const std::string &userId,
+    const std::string &bookId,
+    int limit,
+    int offset) {
     std::vector<GeneratedImage> images;
     try {
         auto db = drogon::app().getDbClient();
         const std::string base(kSelectColumns);
 
+        // LIMIT/OFFSET 占位符显式转 int4（PG 默认推断 bigint，与 Drogon 的 4 字节整型绑定
+        // 不匹配会报 "insufficient data left in message"，见 docs/开发记录.md 问题 24）
         if (bookId.empty()) {
             auto result = db->execSqlSync(
                 base + " WHERE i.user_id = $1 "
-                       "ORDER BY i.created_at DESC, i.id DESC LIMIT $2 OFFSET $3",
+                       "ORDER BY i.created_at DESC, i.id DESC LIMIT $2::int OFFSET $3::int",
                 userId, limit, offset);
             for (size_t i = 0; i < result.size(); ++i) {
                 images.push_back(GeneratedImage::fromRow(result[i]));
@@ -102,7 +105,7 @@ std::vector<GeneratedImage> GeneratedImageRepository::findByUserId(const std::st
                 base +
                     " JOIN generation_tasks t ON t.id = i.task_id "
                     " WHERE i.user_id = $1 AND t.book_id = $2::uuid "
-                    "ORDER BY i.created_at DESC, i.id DESC LIMIT $3 OFFSET $4",
+                    "ORDER BY i.created_at DESC, i.id DESC LIMIT $3::int OFFSET $4::int",
                 userId, bookId, limit, offset);
             for (size_t i = 0; i < result.size(); ++i) {
                 images.push_back(GeneratedImage::fromRow(result[i]));
@@ -110,6 +113,8 @@ std::vector<GeneratedImage> GeneratedImageRepository::findByUserId(const std::st
         }
     } catch (const std::exception &e) {
         spdlog::error("查询生成图列表失败: {}", e.what());
+        // 查询失败不能伪装成空列表，交由服务层返回 500
+        return std::nullopt;
     }
     return images;
 }

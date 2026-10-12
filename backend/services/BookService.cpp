@@ -56,10 +56,16 @@ ServiceResult BookService::listBooks(const std::string &userId,
     const int offset = (page - 1) * limit;
 
     const auto books = BookRepository::findByUserId(userId, status, limit, offset);
+    if (!books.has_value()) {
+        // 查询失败与「确实没有绘本」必须区分：前者回 500，前端会弹出明确错误提示
+        result.code = 500;
+        result.message = "查询绘本列表失败，请稍后重试";
+        return result;
+    }
     const int total = BookRepository::countByUserId(userId, status);
 
     json items = json::array();
-    for (const auto &book : books) {
+    for (const auto &book : *books) {
         items.push_back(book.toJson());
     }
 

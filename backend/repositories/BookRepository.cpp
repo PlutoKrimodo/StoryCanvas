@@ -53,18 +53,23 @@ std::optional<Book> BookRepository::findById(const std::string &id) {
     }
 }
 
-std::vector<Book> BookRepository::findByUserId(const std::string &userId,
-                                               const std::string &status,
-                                               int limit,
-                                               int offset) {
+std::optional<std::vector<Book>> BookRepository::findByUserId(const std::string &userId,
+                                                             const std::string &status,
+                                                             int limit,
+                                                             int offset) {
     std::vector<Book> books;
     try {
         auto db = drogon::app().getDbClient();
         const std::string base(kSelectColumns);
 
+        // LIMIT/OFFSET 的占位符必须显式转 int4：PostgreSQL 对 LIMIT/OFFSET 默认把参数推断为
+        // bigint(8 字节)，而 Drogon 的整型绑定按 sizeof(int)=4 字节二进制发送（format=1），
+        // 两者不匹配会报 "insufficient data left in message"（见 docs/开发记录.md 问题 24）。
+        // 注意：写成 ::bigint 无效——客户端依旧只发 4 字节。
         if (status.empty()) {
             auto result = db->execSqlSync(
-                base + " WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3",
+                base + " WHERE user_id = $1 "
+                       "ORDER BY created_at DESC, id DESC LIMIT $2::int OFFSET $3::int",
                 userId, limit, offset);
             for (size_t i = 0; i < result.size(); ++i) {
                 books.push_back(Book::fromRow(result[i]));
@@ -72,7 +77,7 @@ std::vector<Book> BookRepository::findByUserId(const std::string &userId,
         } else {
             auto result = db->execSqlSync(
                 base + " WHERE user_id = $1 AND status = $2 "
-                       "ORDER BY created_at DESC, id DESC LIMIT $3 OFFSET $4",
+                       "ORDER BY created_at DESC, id DESC LIMIT $3::int OFFSET $4::int",
                 userId, status, limit, offset);
             for (size_t i = 0; i < result.size(); ++i) {
                 books.push_back(Book::fromRow(result[i]));
@@ -80,6 +85,8 @@ std::vector<Book> BookRepository::findByUserId(const std::string &userId,
         }
     } catch (const std::exception &e) {
         spdlog::error("查询绘本列表失败: {}", e.what());
+        // 查询失败不能伪装成空列表，交由服务层返回 500
+        return std::nullopt;
     }
     return books;
 }

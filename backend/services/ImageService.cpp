@@ -54,10 +54,16 @@ ServiceResult ImageService::listImages(const std::string &userId,
     const int offset = (page - 1) * limit;
 
     const auto images = GeneratedImageRepository::findByUserId(userId, bookId, limit, offset);
+    if (!images.has_value()) {
+        // 查询失败与「确实没有图片」必须区分：前者回 500，前端会弹出明确错误提示
+        result.code = 500;
+        result.message = "查询图片列表失败，请稍后重试";
+        return result;
+    }
     const int total = GeneratedImageRepository::countByUserId(userId, bookId);
 
     json items = json::array();
-    for (const auto &image : images) {
+    for (const auto &image : *images) {
         items.push_back(image.toJson());
     }
 

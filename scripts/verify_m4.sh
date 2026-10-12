@@ -16,7 +16,7 @@
 # 覆盖验收项（对应 docs/16 第 8.5 节 M4 验收标准）：
 #   创建任务(201) → 状态流转(pending/processing→completed) → 生成图可访问 →
 #   保存到绘本（绑定 image_id）→ 页列表含 image_url → 重新生成 →
-#   生成历史 → 取消/越权/未认证校验
+#   生成历史（total + items 明细）→ 图片列表（total + items 明细）→ 取消/越权/未认证校验
 # ============================================================
 set -uo pipefail
 
@@ -192,23 +192,38 @@ code=$(request POST "/generation/${TASK_ID}/regenerate" "$(json '{}')" "$TOKEN_B
 expect "越权重生成被拒" 403 "$code"
 
 # ---------- 5. 生成历史 ----------
-echo "[17] 生成历史"
+echo "[17] 生成历史（total + items）"
 code=$(request GET "/generation/history?page=1&limit=10" "" "$TOKEN_A")
 expect "历史查询成功" 200 "$code"
 HIST_TOTAL="$(field '.data.total')"
 if [ "${HIST_TOTAL:-0}" -ge 2 ] 2>/dev/null; then ok "历史条数 ${HIST_TOTAL}"; else bad "历史条数异常（${HIST_TOTAL}）"; fi
+# 明细断言：total 有数但 items 为空，通常是列表查询失败被吞成空数组（见 docs/开发记录.md 问题 24）
+HIST_ITEMS="$(field '.data.items | length')"
+if [ "${HIST_ITEMS:-0}" -ge 2 ] 2>/dev/null; then ok "历史返回 ${HIST_ITEMS} 条明细"; else bad "历史明细为空（items=${HIST_ITEMS}）"; fi
 
-echo "[18] 按绘本筛选历史"
-code=$(request GET "/generation/history?book_id=${BOOK_ID}" "" "$TOKEN_A")
+echo "[18] 按绘本筛选历史（total + items）"
+code=$(request GET "/generation/history?book_id=${BOOK_ID}&page=1&limit=10" "" "$TOKEN_A")
 expect "筛选成功" 200 "$code"
-if [ "${HIST_TOTAL:-0}" -ge 1 ] 2>/dev/null; then ok "绘本维度历史非空"; else bad "绘本维度历史为空"; fi
+FILT_TOTAL="$(field '.data.total')"
+if [ "${FILT_TOTAL:-0}" -ge 1 ] 2>/dev/null; then ok "绘本维度历史条数 ${FILT_TOTAL}"; else bad "绘本维度历史为空"; fi
+FILT_ITEMS="$(field '.data.items | length')"
+if [ "${FILT_ITEMS:-0}" -ge 1 ] 2>/dev/null; then ok "绘本维度返回 ${FILT_ITEMS} 条明细"; else bad "绘本维度历史明细为空（items=${FILT_ITEMS}）"; fi
 
-# ---------- 6. 鉴权 ----------
-echo "[19] 未携带 Token 创建任务"
+# ---------- 6. 图片列表（列表类接口明细回归） ----------
+echo "[19] 图片列表（total + items）"
+code=$(request GET "/images?page=1&limit=10" "" "$TOKEN_A")
+expect "图片列表成功" 200 "$code"
+IMG_TOTAL="$(field '.data.total')"
+if [ "${IMG_TOTAL:-0}" -ge 1 ] 2>/dev/null; then ok "图片总数 ${IMG_TOTAL}"; else bad "图片总数异常（${IMG_TOTAL}）"; fi
+IMG_ITEMS="$(field '.data.items | length')"
+if [ "${IMG_ITEMS:-0}" -ge 1 ] 2>/dev/null; then ok "图片列表返回 ${IMG_ITEMS} 条明细"; else bad "图片列表明细为空（items=${IMG_ITEMS}）"; fi
+
+# ---------- 7. 鉴权 ----------
+echo "[20] 未携带 Token 创建任务"
 code=$(request POST /generation "$(json --arg t 'x' '{text:$t}')")
 expect "未认证被拒" 401 "$code"
 
-echo "[20] 用户 B 访问用户 A 的任务"
+echo "[21] 用户 B 访问用户 A 的任务"
 code=$(request GET "/generation/${TASK_ID}" "" "$TOKEN_B")
 expect "越权访问被拒" 403 "$code"
 
