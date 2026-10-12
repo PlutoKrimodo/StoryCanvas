@@ -1,6 +1,8 @@
-import { Avatar, Button, Card, Descriptions, Typography } from 'antd'
+import { Avatar, Button, Card, Typography } from 'antd'
 import { UserOutlined } from '@ant-design/icons'
 
+import AppLayout from '../../components/layout/AppLayout'
+import PageHeader from '../../components/layout/PageHeader'
 import { useAuth } from '../../hooks/useAuth'
 import { formatDateTime } from '../../utils/datetime'
 
@@ -10,27 +12,40 @@ function Profile() {
   const { user, signOut } = useAuth()
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-10">
-      <div className="max-w-2xl mx-auto">
-        <Card>
+    <AppLayout variant="app">
+      <div className="mx-auto w-full max-w-2xl">
+        <PageHeader title="个人中心" description="账号信息与登录状态" />
+
+        <Card className="shadow-card">
           <div className="flex items-center gap-4 mb-6">
-            <Avatar size={64} src={user?.avatar || undefined} icon={<UserOutlined />} />
+            <Avatar
+              size={64}
+              src={user?.avatar || undefined}
+              icon={<UserOutlined />}
+              className="ring-2 ring-clay/30"
+            />
             <div>
               <Title level={4} className="!mb-0">
                 {user?.username ?? '未登录'}
               </Title>
-              <Typography.Text type="secondary">{user?.email}</Typography.Text>
             </div>
           </div>
 
-          <Descriptions column={1} bordered size="middle">
-            <Descriptions.Item label="用户 ID">{user?.id ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="用户名">{user?.username ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="邮箱">{user?.email ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="注册时间">
-              {formatDateTime(user?.created_at,'YYYY-MM-DD HH:mm:ss')}
-            </Descriptions.Item>
-          </Descriptions>
+          <ul className="divide-y divide-hairline border-t border-hairline">
+            {(
+              [
+                ['用户 ID', user?.id ?? '-'],
+                ['用户名', user?.username ?? '-'],
+                ['邮箱', user?.email ?? '-'],
+                ['注册时间', formatDateTime(user?.created_at, 'YYYY-MM-DD HH:mm:ss')],
+              ] as const
+            ).map(([label, value]) => (
+              <li key={label} className="flex items-baseline justify-between gap-6 py-3">
+                <span className="shrink-0 text-sm text-ink2">{label}</span>
+                <span className="min-w-0 break-all text-sm text-ink">{value}</span>
+              </li>
+            ))}
+          </ul>
 
           <div className="mt-6 text-right">
             <Button danger onClick={signOut}>
@@ -39,7 +54,7 @@ function Profile() {
           </div>
         </Card>
       </div>
-    </div>
+    </AppLayout>
   )
 }
 

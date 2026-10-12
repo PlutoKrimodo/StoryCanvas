@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
+  App,
   Button,
   Card,
   Col,
@@ -13,7 +14,6 @@ import {
   Skeleton,
   Spin,
   Typography,
-  message,
 } from 'antd'
 import { DeleteOutlined, EditOutlined, ReloadOutlined, RocketOutlined } from '@ant-design/icons'
 
@@ -32,6 +32,7 @@ const { Paragraph, Text } = Typography
 function BookDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { message } = App.useApp()
   const { current, detailLoading, fetchBook, updateBook, removeBook } = useBookStore()
 
   const [editOpen, setEditOpen] = useState(false)

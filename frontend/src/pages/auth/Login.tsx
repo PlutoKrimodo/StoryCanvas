@@ -2,6 +2,7 @@ import { Button, Card, Form, Input, Typography } from 'antd'
 import { LockOutlined, MailOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 
+import AppLayout from '../../components/layout/AppLayout'
 import { useAuth } from '../../hooks/useAuth'
 import type { LoginRequest } from '../../types/auth'
 
@@ -19,8 +20,8 @@ function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 px-4">
-      <Card className="w-full max-w-md shadow-lg">
+    <AppLayout variant="auth">
+      <Card className="shadow-card">
         <div className="text-center mb-6">
           <Title level={3} className="!mb-1">
             登录 StoryCanvas
@@ -63,7 +64,7 @@ function Login() {
           <Text type="secondary">还没有账号？</Text> <Link to="/register">立即注册</Link>
         </div>
       </Card>
-    </div>
+    </AppLayout>
   )
 }
 

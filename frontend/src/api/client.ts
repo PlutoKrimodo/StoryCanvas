@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
-import { message } from 'antd'
 
+import { antMessage as message } from '../theme/antMessage'
 import { useAuthStore } from '../stores/authStore'
 import type { ApiResponse } from '../types/api'
 import type { GuestSession, RefreshResponse } from '../types/auth'

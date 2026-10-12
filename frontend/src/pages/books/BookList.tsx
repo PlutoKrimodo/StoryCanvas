@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Empty, Pagination, Spin, Tabs, message } from 'antd'
+import { App, Button, Empty, Pagination, Spin, Tabs } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 
 import AppLayout from '../../components/layout/AppLayout'
@@ -20,6 +20,7 @@ const STATUS_TABS = [
 
 function BookList() {
   const navigate = useNavigate()
+  const { message } = App.useApp()
   const { books, total, page, limit, loading, fetchBooks, createBook, updateBook } = useBookStore()
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')

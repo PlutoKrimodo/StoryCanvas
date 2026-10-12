@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Form, Input, InputNumber, Modal, Select, message } from 'antd'
+import { Alert, App, Form, Input, InputNumber, Modal, Select } from 'antd'
 
 import { booksApi } from '../../api/books'
 import { pagesApi } from '../../api/pages'
@@ -32,6 +32,7 @@ function SaveToBookModal({
   onCancel,
   onSaved,
 }: SaveToBookModalProps) {
+  const { message } = App.useApp()
   const [form] = Form.useForm<SaveToBookFormValues>()
   const [books, setBooks] = useState<Book[]>([])
   const [loadingBooks, setLoadingBooks] = useState(false)

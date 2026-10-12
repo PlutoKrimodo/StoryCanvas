@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Card, Collapse, Empty, Typography, message } from 'antd'
+import { App, Button, Card, Collapse, Empty, Typography } from 'antd'
 import { DownloadOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 
 import ArtImage from '../common/ArtImage'
@@ -86,6 +86,7 @@ function renderArchive(rows: ArchiveRow[]) {
 
 /** 生成结果预览 + 操作（保存到绘本优先，下载/重新生成次之）。 */
 function ResultPreview({ task, onRegenerate, onSaveToBook }: ResultPreviewProps) {
+  const { message } = App.useApp()
   const [downloading, setDownloading] = useState(false)
   const imageId = task.result?.image_id ?? null
   const imageUrl = task.result?.image_url ?? null

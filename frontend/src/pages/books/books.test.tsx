@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Book } from '../../types/book'
@@ -7,6 +7,7 @@ import type { BookPage } from '../../types/page'
 import BookCard from '../../components/book/BookCard'
 import BookDetail from './BookDetail'
 import BookList from './BookList'
+import { renderWithTheme } from '../../test/renderWithTheme'
 
 const book: Book = {
   id: 'b1',
@@ -49,23 +50,20 @@ vi.mock('../../api/pages', () => ({
   pagesApi: { list: () => Promise.resolve({ data: { data: pages } }) },
 }))
 
-describe('绘本域接入新主题（docs/17 Step 7）', () => {
+describe('绘本域接入新主题（docs/17 Step 7–8）', () => {
   beforeEach(() => {
     bookStore.books = []
     bookStore.total = 0
     bookStore.loading = false
     bookStore.current = null
     bookStore.detailLoading = false
+    bookStore.createBook = vi.fn()
   })
 
   afterEach(() => cleanup())
 
   it('BookList：「新建绘本」进 PageHeader 操作区，空态是画布虚线面板', () => {
-    const { container } = render(
-      <MemoryRouter initialEntries={['/books']}>
-        <BookList />
-      </MemoryRouter>,
-    )
+    const { container } = renderWithTheme(<BookList />, { at: '/books' })
     expect(screen.getByRole('heading', { name: '我的绘本' })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /新建绘本/ })).toHaveLength(2)
     expect(container.querySelector('.border-dashed')).not.toBeNull()
@@ -83,12 +81,11 @@ describe('绘本域接入新主题（docs/17 Step 7）', () => {
 
   it('BookDetail：头部汇总标题与操作，页图用 hairline 令牌', async () => {
     bookStore.current = book
-    const { container } = render(
-      <MemoryRouter initialEntries={['/books/b1']}>
-        <Routes>
-          <Route path="/books/:id" element={<BookDetail />} />
-        </Routes>
-      </MemoryRouter>,
+    const { container } = renderWithTheme(
+      <Routes>
+        <Route path="/books/:id" element={<BookDetail />} />
+      </Routes>,
+      { at: '/books/b1' },
     )
 
     // 先把页面列表的异步加载冲刷进 act，再断言，避免 setState 落在 act 之外
@@ -106,14 +103,31 @@ describe('绘本域接入新主题（docs/17 Step 7）', () => {
 
   it('BookDetail：加载态用骨架屏而不是大 Spin', () => {
     bookStore.detailLoading = true
-    const { container } = render(
-      <MemoryRouter initialEntries={['/books/b1']}>
-        <Routes>
-          <Route path="/books/:id" element={<BookDetail />} />
-        </Routes>
-      </MemoryRouter>,
+    const { container } = renderWithTheme(
+      <Routes>
+        <Route path="/books/:id" element={<BookDetail />} />
+      </Routes>,
+      { at: '/books/b1' },
     )
     expect(container.querySelector('.ant-skeleton')).not.toBeNull()
     expect(container.querySelector('.ant-spin')).toBeNull()
+  })
+
+  it('新建绘本的成功提示走 App 上下文而非 antd 静态方法（docs/17 Step 8）', async () => {
+    bookStore.createBook = vi.fn().mockResolvedValue(book)
+    renderWithTheme(<BookList />, { at: '/books' })
+
+    fireEvent.click(screen.getAllByRole('button', { name: /新建绘本/ })[0])
+    fireEvent.change(screen.getByLabelText('标题'), { target: { value: '新绘本' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }))
+    })
+
+    expect(await screen.findByText('绘本创建成功')).toBeInTheDocument()
+    expect(bookStore.createBook).toHaveBeenCalledWith({
+      title: '新绘本',
+      description: '',
+      status: 'draft',
+    })
   })
 })

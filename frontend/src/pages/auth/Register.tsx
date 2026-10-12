@@ -1,7 +1,8 @@
-import { Button, Card, Form, Input, Typography, message } from 'antd'
+import { App, Button, Card, Form, Input, Typography } from 'antd'
 import { LockOutlined, MailOutlined, UserOutlined } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 
+import AppLayout from '../../components/layout/AppLayout'
 import { useAuth } from '../../hooks/useAuth'
 import type { RegisterRequest } from '../../types/auth'
 
@@ -13,6 +14,7 @@ interface RegisterForm extends RegisterRequest {
 
 function Register() {
   const navigate = useNavigate()
+  const { message } = App.useApp()
   const { register, loading } = useAuth()
 
   const handleFinish = async (values: RegisterForm) => {
@@ -30,8 +32,8 @@ function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 px-4">
-      <Card className="w-full max-w-md shadow-lg">
+    <AppLayout variant="auth">
+      <Card className="shadow-card">
         <div className="text-center mb-6">
           <Title level={3} className="!mb-1">
             注册账号
@@ -116,7 +118,7 @@ function Register() {
           <Text type="secondary">已有账号？</Text> <Link to="/login">返回登录</Link>
         </div>
       </Card>
-    </div>
+    </AppLayout>
   )
 }
 

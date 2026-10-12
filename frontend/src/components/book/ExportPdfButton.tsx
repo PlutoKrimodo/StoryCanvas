@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, message } from 'antd'
+import { App, Button } from 'antd'
 import { FilePdfOutlined } from '@ant-design/icons'
 
 import type { BookPage } from '../../types/page'
@@ -13,6 +13,7 @@ interface ExportPdfButtonProps {
 
 /** 导出绘本为多页 PDF（前端生成，不落盘、不走后端导出接口）。 */
 function ExportPdfButton({ bookTitle, pages, disabled }: ExportPdfButtonProps) {
+  const { message } = App.useApp()
   const [exporting, setExporting] = useState(false)
 
   const handleExport = async () => {

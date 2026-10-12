@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Button, Card, Col, Row, Typography, message } from 'antd'
+import { App, Button, Card, Col, Row, Typography } from 'antd'
 
 import GenerationForm from '../../components/ai/GenerationForm'
 import GenerationHistory from '../../components/ai/GenerationHistory'
@@ -28,6 +28,7 @@ interface ReuseState {
  * 结果可事后通过「保存到绘本」落到任意绘本（T-1 解耦设计）。
  */
 function Generate() {
+  const { message } = App.useApp()
   const [searchParams] = useSearchParams()
   const bookId = searchParams.get('bookId') ?? undefined
 

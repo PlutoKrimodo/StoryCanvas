@@ -1,6 +1,7 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { renderWithTheme as render } from '../../test/renderWithTheme'
 import ResultPreview from './ResultPreview'
 import { imagesApi } from '../../api/images'
 import { TaskStatus, type ParsedData, type TaskResult } from '../../types/generation'
