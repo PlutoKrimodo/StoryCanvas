@@ -44,12 +44,38 @@ scan_added_lines_from_diff() {
 mask_hits() {
     sed -E -e "s#(sk-)[A-Za-z0-9]{20,}#\\1***#g" \
            -e 's/[[:space:]]*[=:][[:space:]]*["'\'']?.*$/ = ***（值已隐藏）/' \
-           -e 's/\t/:/'
+           -e 's/\t/:/g'
 }
 
-# stdin：候选行（文件<TAB>行号<TAB>内容）；stdout：脱敏后的命中；返回值：命中条数>0 即失败
+# stdin：候选记录（文件<TAB>行号<TAB>内容）；stdout：脱敏后的命中
+#
+# 关键：模式匹配与白名单只看「内容」字段，路径/行号不参与判断。
+# 早先整行参与匹配时，ai-service/.env.example 这类路径里的 "example" 会命中占位白名单，
+# 把写进模板文件的真实 key 一并放行（实测漏检）。
 filter_secret_lines() {
-    grep -E "$RE_CONTENT" | grep -vE "$RE_ALLOW" | grep -vE "$RE_PLACEHOLDER" | mask_hits
+    _loc=$(mktemp) _con=$(mktemp) _sel=$(mktemp) || return 0
+    awk -v LOC="$_loc" -v CON="$_con" '
+        {
+            i = index($0, "\t")
+            j = index(substr($0, i + 1), "\t")
+            if (i == 0 || j == 0) next
+            base = i + j
+            print substr($0, 1, base - 1) > LOC
+            print substr($0, base + 1)    > CON
+        }
+    '
+    grep -nE "$RE_CONTENT" "$_con" 2>/dev/null \
+        | grep -vE "$RE_ALLOW|$RE_PLACEHOLDER" \
+        | cut -d: -f1 > "$_sel" 2>/dev/null
+    if [ -s "$_sel" ]; then
+        awk -v IDX="$_sel" '
+            BEGIN { while ((getline i < IDX) > 0) need[i] = 1; close(IDX) }
+            FNR == NR { if (need[FNR]) content[FNR] = $0; next }
+            need[FNR] { print $0 "\t" content[FNR] }
+        ' "$_con" "$_loc" | mask_hits
+    fi
+    rm -f "$_loc" "$_con" "$_sel"
+    return 0
 }
 
 # 待检查的文件名（每行一个）→ 命中即打印
