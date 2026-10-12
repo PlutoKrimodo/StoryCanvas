@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { Button, Card, Collapse, Empty, Space, Tag, Typography, message } from 'antd'
+import { Button, Card, Collapse, Empty, Typography, message } from 'antd'
 import { DownloadOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 
 import ArtImage from '../common/ArtImage'
 import { imagesApi } from '../../api/images'
 import type { TaskResult } from '../../types/generation'
+import { LOGO_COLORS } from '../../theme/palette'
 
-const { Paragraph, Text } = Typography
+const { Text } = Typography
 
 interface ResultPreviewProps {
   task: TaskResult
@@ -15,61 +16,75 @@ interface ResultPreviewProps {
   onSaveToBook: (imageId: string) => void
 }
 
-function renderParsed(task: TaskResult) {
+interface ArchiveRow {
+  label: string
+  values: string[]
+}
+
+/** parsed_data.scene 的字段名来自提示词模板，展示时中文化以免档案里混排英文键 */
+const SCENE_LABELS: Record<string, string> = {
+  location: '地点',
+  time: '时间',
+  weather: '天气',
+  mood: '氛围',
+}
+
+function buildRows(task: TaskResult): ArchiveRow[] {
   const parsed = task.parsed_data
   if (!parsed) {
-    return <Text type="secondary">暂无结构化解析结果</Text>
+    return []
   }
 
   const sceneEntries = Object.entries(parsed.scene ?? {}).filter(([, value]) => !!value)
 
+  return [
+    { label: '角色', values: (parsed.characters ?? []).map((character) => character.name) },
+    { label: '场景', values: sceneEntries.map(([key, value]) => `${SCENE_LABELS[key] ?? key}：${String(value)}`) },
+    { label: '物品', values: parsed.objects ?? [] },
+    { label: '动作', values: parsed.actions ?? [] },
+    { label: '情绪', values: parsed.emotions ?? [] },
+  ].filter((row) => row.values.length > 0)
+}
+
+/**
+ * 解析结果档案化：五组 Tag 收成「标签 + 圆点值」五行。
+ * 圆点沿用 logo 五色并跨分组连续轮转，避免每行都从同一色开始。
+ */
+function renderArchive(rows: ArchiveRow[]) {
+  if (!rows.length) {
+    return <Text type="secondary">暂无结构化解析结果</Text>
+  }
+
+  let cursor = 0
+  const dotted = rows.map((row) => ({
+    ...row,
+    dots: row.values.map(() => LOGO_COLORS[cursor++ % LOGO_COLORS.length]),
+  }))
+
   return (
-    <Space direction="vertical" size={4} className="w-full">
-      {parsed.characters?.length ? (
-        <div>
-          <Text strong>角色：</Text>
-          {parsed.characters.map((character) => (
-            <Tag key={character.name}>{character.name}</Tag>
-          ))}
+    <div className="flex flex-col gap-y-2">
+      {dotted.map((row) => (
+        <div key={row.label} className="flex gap-3">
+          <span className="w-8 shrink-0 pt-[3px] text-xs text-ink3">{row.label}</span>
+          <span className="flex flex-wrap gap-x-4 gap-y-1">
+            {row.values.map((value, index) => (
+              <span key={value} className="inline-flex items-center gap-1.5 text-sm text-ink2">
+                <span
+                  aria-hidden
+                  className="h-[3px] w-[3px] rounded-full"
+                  style={{ backgroundColor: row.dots[index] }}
+                />
+                {value}
+              </span>
+            ))}
+          </span>
         </div>
-      ) : null}
-      {sceneEntries.length ? (
-        <div>
-          <Text strong>场景：</Text>
-          {sceneEntries.map(([key, value]) => (
-            <Tag key={key}>{`${key}: ${String(value)}`}</Tag>
-          ))}
-        </div>
-      ) : null}
-      {parsed.objects?.length ? (
-        <div>
-          <Text strong>物品：</Text>
-          {parsed.objects.map((item) => (
-            <Tag key={item}>{item}</Tag>
-          ))}
-        </div>
-      ) : null}
-      {parsed.actions?.length ? (
-        <div>
-          <Text strong>动作：</Text>
-          {parsed.actions.map((item) => (
-            <Tag key={item}>{item}</Tag>
-          ))}
-        </div>
-      ) : null}
-      {parsed.emotions?.length ? (
-        <div>
-          <Text strong>情绪：</Text>
-          {parsed.emotions.map((item) => (
-            <Tag key={item}>{item}</Tag>
-          ))}
-        </div>
-      ) : null}
-    </Space>
+      ))}
+    </div>
   )
 }
 
-/** 生成结果预览 + 操作（下载 / 重新生成 / 保存到绘本）。 */
+/** 生成结果预览 + 操作（保存到绘本优先，下载/重新生成次之）。 */
 function ResultPreview({ task, onRegenerate, onSaveToBook }: ResultPreviewProps) {
   const [downloading, setDownloading] = useState(false)
   const imageId = task.result?.image_id ?? null
@@ -91,35 +106,7 @@ function ResultPreview({ task, onRegenerate, onSaveToBook }: ResultPreviewProps)
   }
 
   return (
-    <Card
-      title="生成结果"
-      className="!rounded-2xl"
-      extra={
-        <Space>
-          <Button
-            size="small"
-            icon={<DownloadOutlined />}
-            disabled={!imageId}
-            loading={downloading}
-            onClick={handleDownload}
-          >
-            下载
-          </Button>
-          <Button size="small" icon={<ReloadOutlined />} onClick={onRegenerate}>
-            重新生成
-          </Button>
-          <Button
-            size="small"
-            type="primary"
-            icon={<SaveOutlined />}
-            disabled={!imageId}
-            onClick={() => imageId && onSaveToBook(imageId)}
-          >
-            保存到绘本
-          </Button>
-        </Space>
-      }
-    >
+    <Card title="生成结果">
       {imageUrl ? (
         <ArtImage
           src={imageUrl}
@@ -131,25 +118,49 @@ function ResultPreview({ task, onRegenerate, onSaveToBook }: ResultPreviewProps)
         <Empty description="暂无生成图" />
       )}
 
+      {/* 操作条紧贴图片：转化动作（保存到绘本）为唯一 primary */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Button
+          type="primary"
+          icon={<SaveOutlined />}
+          disabled={!imageId}
+          onClick={() => imageId && onSaveToBook(imageId)}
+        >
+          保存到绘本
+        </Button>
+        <Button
+          icon={<DownloadOutlined />}
+          disabled={!imageId}
+          loading={downloading}
+          onClick={handleDownload}
+        >
+          下载
+        </Button>
+        <Button type="link" icon={<ReloadOutlined />} onClick={onRegenerate}>
+          重新生成
+        </Button>
+      </div>
+
       {task.original_text ? (
-        <Paragraph type="secondary" className="!mt-4 !mb-2 text-sm">
-          原文：{task.original_text}
-        </Paragraph>
+        <div className="mt-4 border-l-2 border-clay/30 pl-3">
+          <Text className="text-sm leading-relaxed text-ink2">{task.original_text}</Text>
+        </div>
       ) : null}
 
       <Collapse
         ghost
+        className="mt-4"
         items={[
           {
             key: 'detail',
             label: '查看提示词与解析结果',
             children: (
-              <Space direction="vertical" className="w-full">
-                <Text type="secondary" className="text-xs break-all">
+              <div className="flex flex-col gap-y-3">
+                <Text type="secondary" className="text-xs leading-relaxed break-all">
                   提示词：{task.prompt || '—'}
                 </Text>
-                {renderParsed(task)}
-              </Space>
+                {renderArchive(buildRows(task))}
+              </div>
             ),
           },
         ]}

@@ -8,23 +8,7 @@ import AppLayout from './AppLayout'
 import PageHeader from './PageHeader'
 import Wordmark from './Wordmark'
 
-// jsdom 缺这两个 API，antd 的弹层与响应式钩子会在挂载时取用
-class StubObserver {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
-vi.stubGlobal('ResizeObserver', StubObserver)
-vi.stubGlobal('matchMedia', (query: string) => ({
-  matches: false,
-  media: query,
-  onchange: null,
-  addListener() {},
-  removeListener() {},
-  addEventListener() {},
-  removeEventListener() {},
-  dispatchEvent: () => false,
-}))
+// ResizeObserver / matchMedia 的 jsdom 兜底见 src/test/setup.ts
 
 const guest = { isAuthenticated: false, user: null }
 const signedIn = {

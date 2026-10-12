@@ -1,22 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { useAuthStore } from '../../stores/authStore'
 import Home from './Home'
 
-vi.stubGlobal('ResizeObserver', class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-})
-vi.stubGlobal('matchMedia', (query: string) => ({
-  matches: false,
-  media: query,
-  addEventListener() {},
-  removeEventListener() {},
-  dispatchEvent: () => false,
-}))
+// ResizeObserver / matchMedia 的 jsdom 兜底见 src/test/setup.ts
 
 function LocationProbe() {
   const location = useLocation()
