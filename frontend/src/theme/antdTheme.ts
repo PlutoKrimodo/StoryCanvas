@@ -27,8 +27,8 @@ export const antdTheme: ThemeConfig = {
     colorFillQuaternary: PALETTE.canvas2,
 
     borderRadius: 12,
-    // genRadius 在 base<16 时会把 LG 封顶到 base+2，必须显式覆盖，
-    // 生效后页面里 9 处 `!rounded-2xl` 才有统一替代
+    // genRadius 在 base<16 时会把 LG 封顶到 base+2，必须显式覆盖；
+    // 生效后卡片圆角由这一处单点决定，页面里不再写强制覆盖
     borderRadiusLG: 16,
     borderRadiusSM: 8,
 
@@ -67,7 +67,7 @@ export const antdTheme: ThemeConfig = {
     Skeleton: {
       color: PALETTE.canvas2,
       gradientFromColor: PALETTE.canvas,
-      gradientToColor: '#EFE7DA',
+      gradientToColor: PALETTE.hairline2,
       blockRadius: 14,
     },
     Tabs: {

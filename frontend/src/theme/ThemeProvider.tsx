@@ -19,12 +19,13 @@ function MessageBridge() {
 
 /**
  * 主题底座（docs/17 §2.4）：色板 + 圆角 + 中文 locale + message 桥。
- * `component={false}` 不额外插 DOM，页面容器与路由结构保持原样。
+ * `component="div"` 是 `cssVar: true` 的必要条件（否则 antd 会告警且 `--ant-*`
+ * 只挂在各组件根节点）；补 `contents` 让这层包裹不生成盒子，页面根 DOM 观感不变。
  */
 export default function ThemeProvider({ children }: { children: ReactNode }) {
   return (
     <ConfigProvider theme={antdTheme} locale={zhCN}>
-      <AntdApp component={false}>
+      <AntdApp component="div" className="contents">
         <MessageBridge />
         {children}
       </AntdApp>
