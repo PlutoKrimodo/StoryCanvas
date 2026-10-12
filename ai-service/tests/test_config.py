@@ -22,7 +22,8 @@ def test_production_rejects_missing_or_placeholder_key():
 
 
 def test_production_accepts_real_key():
-    assert build(ENVIRONMENT="production", INTERNAL_API_KEY="real-internal-key")
+    # 值是伪造的：验证「非占位形态」的 key 能通过 production 校验
+    assert build(ENVIRONMENT="production", INTERNAL_API_KEY="real-internal-key")  # allow-secret
 
 
 def test_empty_key_refuses_non_loopback_bind():
