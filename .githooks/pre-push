@@ -16,24 +16,34 @@ fi
 zero=0000000000000000000000000000000000000000
 blocked=0
 
-while read -r remote remote_url local_ref local_sha remote_ref remote_sha; do
+# git 每行推送给 pre-push 的标准输入是 4 个字段（不是 6 个）：
+#   <local ref> SP <local sha> SP <remote ref> SP <remote sha> LF
+# 字段数写错会让 local_sha 读到远端值，逐行被当成「删除分支」跳过，关卡静默失效。
+while read -r local_ref local_sha remote_ref remote_sha; do
     # 删除分支的推送（local_sha 全 0）无需扫描
     case $local_sha in
         ''|"$zero") continue ;;
     esac
 
-    if [ "$remote_sha" = "$zero" ] || [ -z "$remote_sha" ]; then
-        commits=$(git rev-list "$local_sha" --not --all 2>/dev/null)
+    # 取「远端还没有的那段历史」。
+    # 注意不能用 --not --all：本分支自身就在 refs/heads 里，--all 会把待推提交全部排除，
+    # 结果恒为空，等于关卡失效（实测漏检）。
+    if [ -n "$remote_sha" ] && [ "$remote_sha" != "$zero" ] \
+       && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+        commits=$(git rev-list "$remote_sha..$local_sha" 2>/dev/null)
+    elif [ -n "$(git for-each-ref --count=1 --format='%(refname)' refs/remotes)" ]; then
+        commits=$(git rev-list "$local_sha" --not --remotes 2>/dev/null)
     else
-        commits=$(git rev-list "$remote_sha..$local_sha" 2>/dev/null) \
-            || commits=$(git rev-list "$local_sha" --not --all 2>/dev/null)
+        # 没有任何 remote-tracking 引用（首次推新分支）：退化为「只有这条分支有的提交」
+        commits=$(git rev-list "$local_sha" --not --branches 2>/dev/null)
     fi
     [ -n "$commits" ] || continue
 
     for commit in $commits; do
         short=$(git rev-parse --short "$commit")
 
-        names=$(git -c core.quotepath=false show --format= --name-only "$commit")
+        # 只看新增/修改的文件：删除一个敏感文件是正确操作，不该被拦
+        names=$(git -c core.quotepath=false show --format= --name-only --diff-filter=ACM "$commit")
         if ! check_names $names; then
             printf '  ✗ commit %s 引入了不应入库的文件（见上）\n' "$short"
             blocked=1
