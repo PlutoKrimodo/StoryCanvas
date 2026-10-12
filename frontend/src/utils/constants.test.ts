@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  ART_STYLE_META,
   ART_STYLE_OPTIONS,
   IMAGE_SIZE_OPTIONS,
   MAX_PAGES_PER_BOOK,
@@ -12,6 +13,18 @@ import {
 describe('constants', () => {
   it('艺术风格选项与后端 ArtStyle 枚举数量一致', () => {
     expect(ART_STYLE_OPTIONS).toHaveLength(5)
+  })
+
+  it('每种风格都有色卡元数据，且与 ART_STYLE_OPTIONS 同名、四色对齐', () => {
+    ART_STYLE_OPTIONS.forEach((option) => {
+      const meta = ART_STYLE_META[option.value]
+      expect(meta, `${option.value} 缺少 ART_STYLE_META`).toBeDefined()
+      expect(meta.label).toBe(option.label)
+      expect(meta.palette).toHaveLength(4)
+      expect(meta.description.length).toBeGreaterThan(0)
+      meta.palette.forEach((color) => expect(color).toMatch(/^#[0-9A-Fa-f]{6}$/))
+    })
+    expect(Object.keys(ART_STYLE_META)).toHaveLength(ART_STYLE_OPTIONS.length)
   })
 
   it('任务状态文案覆盖全部五种状态', () => {

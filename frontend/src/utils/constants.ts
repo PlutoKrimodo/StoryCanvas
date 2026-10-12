@@ -10,6 +10,42 @@ export const ART_STYLE_OPTIONS = [
   { value: ArtStyle.PENCIL_SKETCH, label: '铅笔素描' },
 ] as const
 
+/**
+ * 艺术风格视觉元数据（docs/17 §4.2）。palette 直接取自
+ * `ai-service/app/prompts/styles/*.py` 的 `palette` 字段，保证「色卡—提示词」
+ * 同源；后端改色时这里要同步（additive 导出，不改 ART_STYLE_OPTIONS）。
+ */
+export const ART_STYLE_META: Record<
+  ArtStyle,
+  { label: string; description: string; palette: [string, string, string, string] }
+> = {
+  [ArtStyle.CARTOON]: {
+    label: '卡通风格',
+    description: '粗描边·高饱和',
+    palette: ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF'],
+  },
+  [ArtStyle.WATERCOLOR]: {
+    label: '水彩风格',
+    description: '通透晕染·柔和边',
+    palette: ['#FFE3E3', '#E3F2FD', '#E8F5E9', '#FFF8E1'],
+  },
+  [ArtStyle.OIL_PAINTING]: {
+    label: '油画风格',
+    description: '厚涂笔触·肌理',
+    palette: ['#8D6E63', '#C62828', '#F9A825', '#1565C0'],
+  },
+  [ArtStyle.ANIME]: {
+    label: '动漫风格',
+    description: '赛璐璐·清亮高光',
+    palette: ['#90CAF9', '#F48FB1', '#FFF59D', '#B39DDB'],
+  },
+  [ArtStyle.PENCIL_SKETCH]: {
+    label: '铅笔素描',
+    description: '单色线条·明暗排线',
+    palette: ['#212121', '#616161', '#BDBDBD', '#F5F5F5'],
+  },
+}
+
 /** 故事文本长度上限（与后端校验一致） */
 export const STORY_TEXT_MAX_LENGTH = 2000
 
