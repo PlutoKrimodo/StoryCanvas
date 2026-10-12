@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Empty, Pagination, Spin, Tabs, Typography, message } from 'antd'
-import { HomeOutlined, PlusOutlined } from '@ant-design/icons'
+import { Button, Empty, Pagination, Spin, Tabs, message } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
 
+import AppLayout from '../../components/layout/AppLayout'
 import BookCard from '../../components/book/BookCard'
 import BookFormModal, { type BookFormValues } from '../../components/book/BookFormModal'
+import PageHeader from '../../components/layout/PageHeader'
 import { useBookStore } from '../../stores/bookStore'
 import type { Book, BookStatus, CreateBookRequest } from '../../types/book'
 import { BOOK_STATUS_OPTIONS } from '../../utils/constants'
-
-const { Title, Paragraph } = Typography
 
 type StatusFilter = BookStatus | 'all'
 
@@ -69,69 +69,53 @@ function BookList() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F5F3FF] via-white to-[#EEF2FF] px-4 py-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <Title level={2} className="!mb-1">
-              我的绘本
-            </Title>
-            <Paragraph type="secondary" className="!mb-0">
-              用一段故事文字，生成属于你的儿童绘本插画
-            </Paragraph>
+    <AppLayout variant="app">
+      <PageHeader
+        title="我的绘本"
+        description="用一段故事文字，生成属于你的儿童绘本插画"
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            新建绘本
+          </Button>
+        }
+      />
+
+      <Tabs activeKey={statusFilter} onChange={(key) => setStatusFilter(key as StatusFilter)} items={STATUS_TABS} />
+
+      <Spin spinning={loading}>
+        {books.length === 0 && !loading ? (
+          <div className="mt-2 flex justify-center rounded-card border border-dashed border-hairline bg-canvas2 py-16">
+            <Empty description="还没有绘本，从「新建绘本」开始创作">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                新建绘本
+              </Button>
+            </Empty>
           </div>
-          <div className="flex items-center gap-3">
-            <Button icon={<HomeOutlined />} onClick={() => navigate('/')}>
-              返回首页
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              新建绘本
-            </Button>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-2">
+            {books.map((book) => (
+              <BookCard
+                key={book.id}
+                book={book}
+                onView={(item) => navigate(`/books/${item.id}`)}
+                onEdit={openEdit}
+              />
+            ))}
           </div>
+        )}
+      </Spin>
+
+      {total > limit ? (
+        <div className="flex justify-center mt-8">
+          <Pagination
+            current={page}
+            pageSize={limit}
+            total={total}
+            showSizeChanger={false}
+            onChange={(nextPage) => fetchBooks({ page: nextPage, status: queryStatus })}
+          />
         </div>
-
-        <Tabs
-          className="mt-4"
-          activeKey={statusFilter}
-          onChange={(key) => setStatusFilter(key as StatusFilter)}
-          items={STATUS_TABS}
-        />
-
-        <Spin spinning={loading}>
-          {books.length === 0 && !loading ? (
-            <div className="py-20 flex justify-center">
-              <Empty description="还没有绘本，点击下方按钮开始创作吧">
-                <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-                  新建绘本
-                </Button>
-              </Empty>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-2">
-              {books.map((book) => (
-                <BookCard
-                  key={book.id}
-                  book={book}
-                  onView={(item) => navigate(`/books/${item.id}`)}
-                  onEdit={openEdit}
-                />
-              ))}
-            </div>
-          )}
-        </Spin>
-
-        {total > limit ? (
-          <div className="flex justify-center mt-8">
-            <Pagination
-              current={page}
-              pageSize={limit}
-              total={total}
-              showSizeChanger={false}
-              onChange={(nextPage) => fetchBooks({ page: nextPage, status: queryStatus })}
-            />
-          </div>
-        ) : null}
-      </div>
+      ) : null}
 
       <BookFormModal
         open={modalOpen}
@@ -140,7 +124,7 @@ function BookList() {
         onCancel={closeModal}
         onSubmit={handleSubmit}
       />
-    </div>
+    </AppLayout>
   )
 }
 

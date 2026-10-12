@@ -34,7 +34,7 @@ function GenerationHistory({ bookId, onReuse }: GenerationHistoryProps) {
           生成历史
         </span>
       }
-      className="!rounded-2xl"
+      className="shadow-card"
     >
       {history.length === 0 && !loading ? (
         <Empty description="还没有生成记录" />
@@ -65,11 +65,11 @@ function GenerationHistory({ bookId, onReuse }: GenerationHistoryProps) {
                       src={task.result.image_url}
                       width={64}
                       height={64}
-                      className="rounded-lg object-cover"
+                      className="rounded-chip object-cover"
                       preview={{ src: task.result.image_url }}
                     />
                   ) : (
-                    <div className="w-16 h-16 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs">
+                    <div className="w-16 h-16 rounded-chip bg-canvas2 flex items-center justify-center text-ink3 text-xs">
                       无图
                     </div>
                   )

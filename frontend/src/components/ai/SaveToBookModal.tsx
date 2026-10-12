@@ -114,7 +114,7 @@ function SaveToBookModal({
       okText="保存"
       cancelText="取消"
       okButtonProps={{ disabled: books.length === 0 }}
-      destroyOnClose
+      destroyOnHidden
     >
       {books.length === 0 && !loadingBooks ? (
         <Alert

@@ -60,7 +60,7 @@ function BookFormModal({ open, book, confirmLoading, onCancel, onSubmit }: BookF
       confirmLoading={confirmLoading}
       okText={book ? '保存' : '创建'}
       cancelText="取消"
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" requiredMark={false} className="mt-4">
         <Form.Item

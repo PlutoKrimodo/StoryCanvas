@@ -18,15 +18,15 @@ function BookCard({ book, onView, onEdit }: BookCardProps) {
   return (
     <Card
       hoverable
-      bodyStyle={{ padding: 0 }}
-      className="h-full !rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+      styles={{ body: { padding: 0 } }}
+      className="h-full overflow-hidden transition-[transform,box-shadow] duration-200 hover:-translate-y-1 hover:shadow-lift"
       onClick={() => onView(book)}
     >
-      <div className="h-40 bg-gradient-to-br from-violet-400 via-indigo-400 to-sky-400 flex items-center justify-center">
+      <div className="h-40 bg-canvas2 border-b border-hairline flex items-center justify-center">
         {book.cover_image ? (
           <img src={book.cover_image} alt={book.title} className="h-full w-full object-cover" />
         ) : (
-          <BookOutlined className="text-5xl text-white/90" />
+          <BookOutlined className="text-5xl text-clay/30" />
         )}
       </div>
 
