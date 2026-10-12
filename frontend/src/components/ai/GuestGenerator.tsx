@@ -1,31 +1,26 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Alert, Button, Card, Typography } from 'antd'
+import { Alert, Button, Card } from 'antd'
 import { DownloadOutlined, LoginOutlined } from '@ant-design/icons'
 
 import GenerationForm from './GenerationForm'
 import GenerationProgress from './GenerationProgress'
 import { imagesApi } from '../../api/images'
 import { useGeneration } from '../../hooks/useGeneration'
-import { useAuthStore } from '../../stores/authStore'
 import { TaskStatus, type GenerationRequest } from '../../types/generation'
-import { GUEST_GENERATION_LIMIT } from '../../utils/constants'
-
-const { Text, Paragraph } = Typography
 
 /**
  * 游客生成器（Guest-first 能力层）：
  * 未登录用户也能直接体验生成；额度用尽后引导登录（登录即「认领」其图片）。
+ * 卡外壳由本组件提供，额度提示由宿主 Home 渲染（docs/17 §4.1）。
  */
 function GuestGenerator() {
   const navigate = useNavigate()
   const { currentTask, polling, createTask, cancel } = useGeneration()
-  const guestQuota = useAuthStore((state) => state.guestQuota)
 
   const [submitting, setSubmitting] = useState(false)
   const [downloading, setDownloading] = useState(false)
 
-  const quota = guestQuota > 0 ? guestQuota : GUEST_GENERATION_LIMIT
   const completed = currentTask?.status === TaskStatus.COMPLETED && !!currentTask.result?.image_url
   const failed = currentTask?.status === TaskStatus.FAILED
 
@@ -57,14 +52,7 @@ function GuestGenerator() {
   }
 
   return (
-    <Card className="!rounded-2xl shadow-sm">
-      <div className="mb-4">
-        <Text strong>游客体验</Text>
-        <Paragraph type="secondary" className="!mb-0 text-sm">
-          无需注册，即可免费生成 {quota} 张插画；登录后可保存到绘本并继续生成。
-        </Paragraph>
-      </div>
-
+    <Card className="shadow-card">
       <GenerationForm
         loading={submitting}
         onSubmit={handleSubmit}

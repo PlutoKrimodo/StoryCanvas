@@ -121,14 +121,17 @@ function Generate() {
 
         <Row gutter={[24, 24]} className="mt-6">
           <Col xs={24} lg={14}>
-            <GenerationForm
-              key={reuse.key}
-              bookId={bookId}
-              initialText={reuse.text}
-              initialStyle={reuse.style}
-              loading={submitting}
-              onSubmit={handleSubmit}
-            />
+            {/* GenerationForm 不再自带 Card，外壳由此处提供（docs/17 §4.1 容器嵌套修正） */}
+            <Card className="shadow-card">
+              <GenerationForm
+                key={reuse.key}
+                bookId={bookId}
+                initialText={reuse.text}
+                initialStyle={reuse.style}
+                loading={submitting}
+                onSubmit={handleSubmit}
+              />
+            </Card>
 
             <div className="mt-6">
               <GenerationProgress

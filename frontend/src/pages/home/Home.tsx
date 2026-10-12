@@ -1,76 +1,118 @@
-import { Button, Card, Typography } from 'antd'
+import {
+  BookOutlined,
+  FilePdfOutlined,
+  ThunderboltOutlined,
+  UserOutlined,
+} from '@ant-design/icons'
+import { Button, Typography } from 'antd'
+import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import GuestGenerator from '../../components/ai/GuestGenerator'
+import AppLayout from '../../components/layout/AppLayout'
+import PageHeader from '../../components/layout/PageHeader'
+import Wordmark from '../../components/layout/Wordmark'
 import { useAuth } from '../../hooks/useAuth'
+import { useAuthStore } from '../../stores/authStore'
+import { GUEST_GENERATION_LIMIT } from '../../utils/constants'
 
-const { Title, Paragraph, Text } = Typography
+const { Paragraph, Text } = Typography
+
+interface Entry {
+  key: string
+  title: string
+  description: string
+  to: string
+  icon: ReactNode
+  accent: string
+}
 
 function Home() {
   const navigate = useNavigate()
-  const { user, isAuthenticated, signOut } = useAuth()
+  const { user, isAuthenticated } = useAuth()
+  const guestQuota = useAuthStore((state) => state.guestQuota)
 
-  // Guest-first：未登录用户进入首页即看到生成器，可先体验后注册
+  // Guest-first：游客看到的是 Google 式居中 hero（logo + 生成器 + 额度小字），无导航干扰
   if (!isAuthenticated) {
+    const quota = guestQuota > 0 ? guestQuota : GUEST_GENERATION_LIMIT
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F5F3FF] via-white to-[#EEF2FF]">
-        <div className="max-w-2xl mx-auto px-4 py-12">
-          <div className="text-center mb-8">
-            <Title level={1} className="!mb-3">
-              StoryCanvas
-            </Title>
-            <Paragraph className="text-lg text-gray-600">
-              基于生成式 AI 的儿童绘本智能创作与图像生成系统
-            </Paragraph>
-            <div className="flex justify-center gap-3 mt-4">
-              <Button type="primary" onClick={() => navigate('/login')}>
-                登录
-              </Button>
-              <Button onClick={() => navigate('/register')}>
-                注册
-              </Button>
-            </div>
+      <AppLayout variant="hero">
+        <div className="animate-enter flex flex-col items-center">
+          <Wordmark size="hero" tagline="把一段故事，画成一幅绘本插画" />
+          <div className="mt-10 w-full">
+            <GuestGenerator />
+            <Text className="mt-4 block text-center text-sm text-ink3">
+              免费 {quota} 张 · 无需注册 · 登录后可保存到绘本并导出 PDF
+            </Text>
           </div>
-
-          <GuestGenerator />
         </div>
-      </div>
+      </AppLayout>
     )
   }
 
-  // 已登录：工作台
+  const entries: Entry[] = [
+    {
+      key: 'books',
+      title: '我的绘本',
+      description: '查看已保存的绘本，逐页管理',
+      to: '/books',
+      icon: <BookOutlined />,
+      accent: 'text-accent-leaf',
+    },
+    {
+      key: 'profile',
+      title: '个人中心',
+      description: '账号信息与生成额度',
+      to: '/profile',
+      icon: <UserOutlined />,
+      accent: 'text-accent-sky',
+    },
+    {
+      key: 'export',
+      title: '导出 PDF',
+      description: '在绘本详情页一键导出多页 PDF',
+      to: '/books',
+      icon: <FilePdfOutlined />,
+      accent: 'text-accent-plum',
+    },
+  ]
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50">
-      <div className="container mx-auto px-4 py-16">
-        <Title level={1} className="!text-center !mb-3">
-          StoryCanvas
-        </Title>
-        <Paragraph className="text-center text-lg text-gray-600">
-          基于生成式 AI 的儿童绘本智能创作与图像生成系统
-        </Paragraph>
+    <AppLayout variant="app">
+      <PageHeader
+        title={`${user?.username ?? ''}，欢迎回来`}
+        description="输入一段故事文字，AI 帮你生成儿童绘本插画；也可把结果保存到绘本并导出多页 PDF。"
+      />
 
-        <div className="flex justify-center mt-10">
-          <Card className="w-full max-w-lg">
-            <Paragraph className="!mb-2">
-              <Text strong>当前用户：</Text>
-              {user?.username ?? '未登录'}
-            </Paragraph>
-            <Paragraph type="secondary">
-              输入一段故事文字，AI 帮你生成儿童绘本插画；也可把结果保存到绘本并导出多页 PDF。
-            </Paragraph>
+      <div className="animate-enter flex flex-col items-center gap-8 py-4">
+        <Button
+          type="primary"
+          size="large"
+          shape="round"
+          icon={<ThunderboltOutlined />}
+          onClick={() => navigate('/generate')}
+        >
+          开始创作
+        </Button>
 
-            <div className="flex flex-wrap gap-3 mt-6">
-              <Button type="primary" onClick={() => navigate('/generate')}>
-                AI 生成插画
-              </Button>
-              <Button onClick={() => navigate('/books')}>我的绘本</Button>
-              <Button onClick={() => navigate('/profile')}>个人中心</Button>
-              <Button onClick={signOut}>退出登录</Button>
-            </div>
-          </Card>
+        <div className="grid w-full gap-3 sm:grid-cols-3">
+          {entries.map((entry) => (
+            <button
+              key={entry.key}
+              type="button"
+              onClick={() => navigate(entry.to)}
+              className="rounded-card bg-paper p-5 text-left ring-1 ring-hairline transition-[transform,box-shadow] duration-200 hover:-translate-y-1 hover:shadow-lift active:scale-[0.98]"
+            >
+              <span className={`text-xl ${entry.accent}`}>{entry.icon}</span>
+              <div className="mt-3 font-medium text-ink">{entry.title}</div>
+              <Paragraph type="secondary" className="!mb-0 mt-1 text-sm">
+                {entry.description}
+              </Paragraph>
+            </button>
+          ))}
         </div>
       </div>
-    </div>
+    </AppLayout>
   )
 }
 

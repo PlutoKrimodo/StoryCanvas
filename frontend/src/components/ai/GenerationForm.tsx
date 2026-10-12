@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Card, Collapse, Form, Input, InputNumber, Select, Space } from 'antd'
+import { Button, Collapse, Form, Input, InputNumber, Select, Space, Typography } from 'antd'
 import { BulbOutlined, ThunderboltOutlined } from '@ant-design/icons'
 
 import StyleSelector from './StyleSelector'
@@ -7,6 +7,7 @@ import type { GenerationRequest } from '../../types/generation'
 import { ArtStyle } from '../../types/generation'
 import { IMAGE_SIZE_OPTIONS, STORY_TEXT_MAX_LENGTH } from '../../utils/constants'
 
+const { Text } = Typography
 const { TextArea } = Input
 
 /** 表单内部字段（parameters 在提交时组装） */
@@ -34,6 +35,7 @@ const SAMPLE_TEXT = '小女孩在雨后的森林里发现了一只受伤的小�
  *
  * 按 TODO T-1 的决策，生成动作与「保存到绘本」解耦：
  * 组件不强制依赖 bookId，便于后续搬到首页做「游客优先」体验。
+ * 不自带 Card：容器外壳交还宿主，避免首页出现 Card 套 Card（docs/17 §4.1）。
  */
 function GenerationForm({
   bookId,
@@ -85,15 +87,13 @@ function GenerationForm({
   }
 
   return (
-    <Card
-      title="故事描述"
-      className="!rounded-2xl"
-      extra={
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <Text strong>故事描述</Text>
         <Button type="link" size="small" icon={<BulbOutlined />} onClick={fillSample}>
           填入示例
         </Button>
-      }
-    >
+      </div>
       <Form
         form={form}
         layout="vertical"
@@ -164,7 +164,7 @@ function GenerationForm({
           </Button>
         </Form.Item>
       </Form>
-    </Card>
+    </div>
   )
 }
 
