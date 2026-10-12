@@ -1,0 +1,51 @@
+#!/bin/sh
+# pre-commit：提交前拦截密钥。
+#   用法一（默认，由 git 调用）：扫描本次 staged 的新增行 + 文件名
+#   用法二（人工校准）：sh .githooks/pre-commit --report-tracked
+#         对当前所有跟踪文件全量扫描，只打印不拦截——用来看误报面，不会改动任何东西
+#
+# 命中只报告「文件:行号 + 变量名」，不回显值。
+
+hooks_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=.githooks/secret-scan.sh
+. "$hooks_dir/secret-scan.sh"
+
+if [ "$1" = "--report-tracked" ]; then
+    printf '报告模式：全量扫描当前跟踪文件（不拦截、不改动任何内容）\n\n'
+    git -c core.quotepath=false ls-files | while IFS= read -r file; do
+        [ -f "$file" ] || continue
+        hits=$(awk -v f="$file" '{printf "%s\t%d\t%s\n", f, NR, $0}' "$file" \
+               | filter_secret_lines)
+        [ -n "$hits" ] && printf '%s\n' "$hits"
+    done
+    printf '\n以上为「已入库内容」的形态命中，仅供校准；历史里的值不会拦截后续提交。\n'
+    exit 0
+fi
+
+if [ "$SKIP_SECRET_CHECK" = "1" ]; then
+    printf '⚠ 已用 SKIP_SECRET_CHECK=1 跳过密钥扫描（本次提交未被检查）\n'
+    exit 0
+fi
+
+staged=$(git -c core.quotepath=false diff --cached --name-only --diff-filter=ACM)
+[ -n "$staged" ] || exit 0
+
+# ==================== 关卡 A：文件名 ====================
+if ! check_names $staged; then
+    printf '✗ 提交被拒绝：上述文件名属于密钥/凭据类，不应进入版本库。\n'
+    printf '  撤销方式：git reset -- <文件>\n'
+    exit 1
+fi
+
+# ==================== 关卡 B+C：新增行内容 ====================
+report=$(git -c core.quotepath=false diff --cached -U0 | scan_added_lines_from_diff | filter_secret_lines)
+if [ -n "$report" ]; then
+    printf '%s\n' "$report"
+    printf '\n✗ 提交被拒绝：新增行里存在密钥形态的值。\n'
+    printf '  逐项确认：git diff --cached -- <文件>\n'
+    printf '  若为占位/示例值：把它改成 change_me 风格，或行尾加 /* allow-secret */\n'
+    printf '  确需跳过本次检查：SKIP_SECRET_CHECK=1 git commit …\n'
+    exit 1
+fi
+
+exit 0

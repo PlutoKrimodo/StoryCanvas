@@ -35,12 +35,22 @@ else
     print_warning "Git 仓库已存在"
 fi
 
+# ==================== Git hooks：密钥拦截 ====================
+# hook 不会随 clone 自动生效，必须在这里写入 core.hooksPath
+if [ -d .git ] && [ -d .githooks ]; then
+    chmod +x .githooks/* 2>/dev/null || true
+    git config core.hooksPath .githooks
+    print_success "已启用 .githooks 密钥拦截（pre-commit / pre-push）"
+    print_warning "核对：git config core.hooksPath 应输出 .githooks"
+fi
+
 # ==================== 环境变量 ====================
 echo "📝 创建 .env 文件..."
 if [ ! -f .env ]; then
     cp .env.example .env
     print_success ".env 文件已创建"
     print_warning "请编辑 .env 填写 DB_PASSWORD / JWT_SECRET / AI_SERVICE_API_KEY（必填）"
+    print_warning "填真实 key 请只用编辑器改 .env：贴进命令行会被记录到本地 CLI 状态文件，这是历史上密钥入库的实际原因"
 else
     print_warning ".env 文件已存在"
 fi

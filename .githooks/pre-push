@@ -1,0 +1,58 @@
+#!/bin/sh
+# pre-push：推送前扫描「远端还没有的那段历史」。
+#
+# 为什么需要它：GitHub 的 push protection 是服务端事后拦截，cnb.cool 侧没有等价检查；
+# 一旦推出去就要吊销密钥 + 改写历史 + 强推两个远端。这道门是推送前唯一可靠的机会。
+
+hooks_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=.githooks/secret-scan.sh
+. "$hooks_dir/secret-scan.sh"
+
+if [ "$SKIP_SECRET_CHECK" = "1" ]; then
+    printf '⚠ 已用 SKIP_SECRET_CHECK=1 跳过推送前密钥扫描\n'
+    exit 0
+fi
+
+zero=0000000000000000000000000000000000000000
+blocked=0
+
+while read -r remote remote_url local_ref local_sha remote_ref remote_sha; do
+    # 删除分支的推送（local_sha 全 0）无需扫描
+    case $local_sha in
+        ''|"$zero") continue ;;
+    esac
+
+    if [ "$remote_sha" = "$zero" ] || [ -z "$remote_sha" ]; then
+        commits=$(git rev-list "$local_sha" --not --all 2>/dev/null)
+    else
+        commits=$(git rev-list "$remote_sha..$local_sha" 2>/dev/null) \
+            || commits=$(git rev-list "$local_sha" --not --all 2>/dev/null)
+    fi
+    [ -n "$commits" ] || continue
+
+    for commit in $commits; do
+        short=$(git rev-parse --short "$commit")
+
+        names=$(git -c core.quotepath=false show --format= --name-only "$commit")
+        if ! check_names $names; then
+            printf '  ✗ commit %s 引入了不应入库的文件（见上）\n' "$short"
+            blocked=1
+        fi
+
+        report=$(git -c core.quotepath=false show --format= -U0 "$commit" | scan_added_lines_from_diff | filter_secret_lines)
+        if [ -n "$report" ]; then
+            printf '  commit %s (%s)\n' "$short" "$(git log -1 --format=%s "$commit" | cut -c1-60)"
+            printf '%s\n' "$report"
+            blocked=1
+        fi
+    done
+done
+
+if [ "$blocked" -ne 0 ]; then
+    printf '\n✗ 推送被拒绝：待推历史中存在密钥形态的值。\n'
+    printf '  尚未推送时的修法：git reset --soft HEAD~<n> 后重做提交\n'
+    printf '  若值已经在历史里：先在厂商控制台吊销该 key，再考虑改写历史；不要用平台的放行链接\n'
+    exit 1
+fi
+
+exit 0
