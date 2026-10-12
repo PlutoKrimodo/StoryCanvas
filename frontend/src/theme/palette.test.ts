@@ -61,3 +61,21 @@ describe('设计令牌双源同步', () => {
     expect(globalsCss).not.toMatch(/@import|url\(['"]?https?:\/\//)
   })
 })
+
+describe('globals.css 红线', () => {
+  const ELEMENT_LEVEL = /(^|[\s,>+~(])(img|svg|div|p|h1|h2|h3|a|span|ul|li|canvas)\b/
+
+  const selectors = () =>
+    [...globalsCss.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(?:^|\})\s*([^{}]+?)\s*\{/g)]
+      .map((match) => match[1].trim())
+      .filter((selector) => !selector.startsWith('@'))
+
+  /**
+   * utils/pdf.ts 把裸 <img> 塞进 body 再交 html2canvas 截图。若样式表里出现
+   * 元素级动画/过渡，图片会在 opacity<1 的一帧被抓取 → 导出 PDF 空白页。
+   * 淡入因此只允许挂在 .sc-artimg 这类显式类上（docs/17 §8.1）。
+   */
+  it('不使用裸元素选择器', () => {
+    expect(selectors().filter((selector) => ELEMENT_LEVEL.test(selector))).toEqual([])
+  })
+})

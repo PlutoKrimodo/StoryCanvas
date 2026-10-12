@@ -5,6 +5,7 @@ import { DownloadOutlined, LoginOutlined } from '@ant-design/icons'
 
 import GenerationForm from './GenerationForm'
 import GenerationProgress from './GenerationProgress'
+import ArtImage from '../common/ArtImage'
 import { imagesApi } from '../../api/images'
 import { useGeneration } from '../../hooks/useGeneration'
 import { TaskStatus, type GenerationRequest } from '../../types/generation'
@@ -71,13 +72,12 @@ function GuestGenerator() {
 
       {completed && currentTask ? (
         <div className="mt-4">
-          <div className="rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center">
-            <img
-              src={currentTask.result!.image_url!}
-              alt={currentTask.original_text ?? '生成结果'}
-              className="max-h-[360px] w-auto"
-            />
-          </div>
+          <ArtImage
+            src={currentTask.result!.image_url!}
+            alt={currentTask.original_text ?? '生成结果'}
+            wrapperClassName="rounded-card"
+            maxHeight={360}
+          />
           <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
             <Button icon={<DownloadOutlined />} loading={downloading} onClick={handleDownload}>
               下载图片

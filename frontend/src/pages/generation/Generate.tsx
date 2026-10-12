@@ -1,18 +1,19 @@
 import { useCallback, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Button, Card, Col, Row, Typography, message } from 'antd'
-import { ArrowLeftOutlined, HomeOutlined } from '@ant-design/icons'
 
 import GenerationForm from '../../components/ai/GenerationForm'
 import GenerationHistory from '../../components/ai/GenerationHistory'
 import GenerationProgress from '../../components/ai/GenerationProgress'
 import ResultPreview from '../../components/ai/ResultPreview'
 import SaveToBookModal from '../../components/ai/SaveToBookModal'
+import AppLayout from '../../components/layout/AppLayout'
+import PageHeader from '../../components/layout/PageHeader'
 import { useGeneration } from '../../hooks/useGeneration'
 import { useGenerationStore } from '../../stores/generationStore'
 import { ArtStyle, TaskStatus, type GenerationRequest, type TaskResult } from '../../types/generation'
 
-const { Title, Paragraph, Text } = Typography
+const { Paragraph, Text } = Typography
 
 interface ReuseState {
   key: number
@@ -27,7 +28,6 @@ interface ReuseState {
  * 结果可事后通过「保存到绘本」落到任意绘本（T-1 解耦设计）。
  */
 function Generate() {
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const bookId = searchParams.get('bookId') ?? undefined
 
@@ -88,87 +88,67 @@ function Generate() {
   const completed = currentTask?.status === TaskStatus.COMPLETED && !!currentTask.result?.image_url
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F5F3FF] via-white to-[#EEF2FF] px-4 py-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Button
-            type="text"
-            icon={<ArrowLeftOutlined />}
-            className="!px-0"
-            onClick={() => navigate(-1)}
-          >
-            返回
-          </Button>
-          <div className="flex items-center gap-2">
-            {currentTask ? (
-              <Button onClick={reset}>重新开始</Button>
-            ) : null}
-            <Button icon={<HomeOutlined />} onClick={() => navigate('/')}>
-              首页
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <Title level={2} className="!mb-1">
-            AI 绘本插画生成
-          </Title>
-          <Paragraph type="secondary" className="!mb-0">
+    <AppLayout variant="app">
+      <PageHeader
+        title="AI 绘本插画生成"
+        description={
+          <>
             输入一段故事文字，选择艺术风格，系统将解析文本、优化提示词并生成插画。
             {bookId ? <Text strong> 本次结果将绑定到当前绘本。</Text> : null}
-          </Paragraph>
-        </div>
+          </>
+        }
+        extra={currentTask ? <Button onClick={reset}>重新开始</Button> : undefined}
+      />
 
-        <Row gutter={[24, 24]} className="mt-6">
-          <Col xs={24} lg={14}>
-            {/* GenerationForm 不再自带 Card，外壳由此处提供（docs/17 §4.1 容器嵌套修正） */}
-            <Card className="shadow-card">
-              <GenerationForm
-                key={reuse.key}
-                bookId={bookId}
-                initialText={reuse.text}
-                initialStyle={reuse.style}
-                loading={submitting}
-                onSubmit={handleSubmit}
-              />
-            </Card>
+      <Row gutter={[24, 24]}>
+        <Col xs={24} lg={14}>
+          {/* GenerationForm 不再自带 Card，外壳由此处提供（docs/17 §4.1 容器嵌套修正） */}
+          <Card className="shadow-card">
+            <GenerationForm
+              key={reuse.key}
+              bookId={bookId}
+              initialText={reuse.text}
+              initialStyle={reuse.style}
+              loading={submitting}
+              onSubmit={handleSubmit}
+            />
+          </Card>
 
+          <div className="mt-6">
+            <GenerationProgress
+              task={currentTask}
+              polling={polling}
+              onCancel={handleCancel}
+              onRegenerate={completed || currentTask?.status === TaskStatus.FAILED ? handleRegenerate : undefined}
+            />
+          </div>
+
+          {completed && currentTask ? (
             <div className="mt-6">
-              <GenerationProgress
+              <ResultPreview
                 task={currentTask}
-                polling={polling}
-                onCancel={handleCancel}
-                onRegenerate={completed || currentTask?.status === TaskStatus.FAILED ? handleRegenerate : undefined}
+                onRegenerate={handleRegenerate}
+                onSaveToBook={(imageId) => {
+                  setSavingImageId(imageId)
+                  setSaveOpen(true)
+                }}
               />
             </div>
+          ) : null}
 
-            {completed && currentTask ? (
-              <div className="mt-6">
-                <ResultPreview
-                  task={currentTask}
-                  onRegenerate={handleRegenerate}
-                  onSaveToBook={(imageId) => {
-                    setSavingImageId(imageId)
-                    setSaveOpen(true)
-                  }}
-                />
-              </div>
-            ) : null}
+          {!currentTask ? (
+            <Card className="!mt-6 border-dashed">
+              <Paragraph type="secondary" className="!mb-0">
+                生成结果会显示在这里。你可以先自由生成，再决定保存到哪本绘本。
+              </Paragraph>
+            </Card>
+          ) : null}
+        </Col>
 
-            {!currentTask ? (
-              <Card className="!rounded-2xl !mt-6 border-dashed">
-                <Paragraph type="secondary" className="!mb-0">
-                  生成结果会显示在这里。你可以先自由生成，再决定保存到哪本绘本。
-                </Paragraph>
-              </Card>
-            ) : null}
-          </Col>
-
-          <Col xs={24} lg={10}>
-            <GenerationHistory bookId={bookId} onReuse={handleReuse} />
-          </Col>
-        </Row>
-      </div>
+        <Col xs={24} lg={10}>
+          <GenerationHistory bookId={bookId} onReuse={handleReuse} />
+        </Col>
+      </Row>
 
       <SaveToBookModal
         open={saveOpen}
@@ -180,7 +160,7 @@ function Generate() {
           void fetchHistory({ book_id: bookId })
         }}
       />
-    </div>
+    </AppLayout>
   )
 }
 

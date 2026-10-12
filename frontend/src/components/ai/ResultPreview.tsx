@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button, Card, Collapse, Empty, Space, Tag, Typography, message } from 'antd'
 import { DownloadOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 
+import ArtImage from '../common/ArtImage'
 import { imagesApi } from '../../api/images'
 import type { TaskResult } from '../../types/generation'
 
@@ -120,9 +121,12 @@ function ResultPreview({ task, onRegenerate, onSaveToBook }: ResultPreviewProps)
       }
     >
       {imageUrl ? (
-        <div className="rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center">
-          <img src={imageUrl} alt={task.original_text ?? '生成结果'} className="max-h-[420px] w-auto" />
-        </div>
+        <ArtImage
+          src={imageUrl}
+          alt={task.original_text ?? '生成结果'}
+          wrapperClassName="rounded-card"
+          maxHeight={420}
+        />
       ) : (
         <Empty description="暂无生成图" />
       )}
