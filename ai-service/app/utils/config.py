@@ -1,7 +1,12 @@
 import json
 from typing import List
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _is_loopback(host: str) -> bool:
+    return host in ("localhost", "::1") or host.startswith("127.")
 
 
 class Settings(BaseSettings):
@@ -21,7 +26,11 @@ class Settings(BaseSettings):
 
     # ==================== 应用配置 ====================
     APP_NAME: str = "StoryCanvas AI Service"
-    HOST: str = "0.0.0.0"
+    # development | testing | production
+    ENVIRONMENT: str = "development"
+    # 默认只绑回环：本服务能用系统 Key 出图，暴露到网卡即等于匿名出图代理。
+    # 容器内由 Dockerfile 的 --host 0.0.0.0 覆盖，走 compose 服务名访问。
+    HOST: str = "127.0.0.1"
     PORT: int = 8000
     DEBUG: bool = False
     WORKERS: int = 4
@@ -90,6 +99,27 @@ class Settings(BaseSettings):
             except json.JSONDecodeError:
                 pass
         return [item.strip() for item in text.split(",") if item.strip()]
+
+    @model_validator(mode="after")
+    def _refuse_insecure_startup(self) -> "Settings":
+        """内部鉴权 fail-closed：校验发生在 settings = Settings()，即 uvicorn bind 端口之前。"""
+        key = (self.INTERNAL_API_KEY or "").strip()
+        placeholder = (
+            not key
+            or key.lower().startswith("change_me")
+            or key.lower().startswith("your_")
+        )
+        if self.ENVIRONMENT.lower() == "production" and placeholder:
+            raise ValueError(
+                "ENVIRONMENT=production 必须配置真实的 INTERNAL_API_KEY"
+                "（禁止留空或沿用 change_me*/your_* 占位值）"
+            )
+        if not key and not _is_loopback(self.HOST):
+            raise ValueError(
+                f"INTERNAL_API_KEY 为空时禁止监听非回环地址 HOST={self.HOST}："
+                "该端口会沦为匿名出图代理。请配置 INTERNAL_API_KEY，或把 HOST 改为 127.0.0.1"
+            )
+        return self
 
 
 settings = Settings()

@@ -28,6 +28,9 @@
   "guest": {
     "generation_quota": 1
   },
+  "quota": {
+    "global_daily_generation_cap": 20
+  },
   "ai_service": {
     "url": "http://localhost:8000",
     "api_key": "",

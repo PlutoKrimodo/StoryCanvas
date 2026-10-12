@@ -62,6 +62,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET 必须配置（见 .env.example）}
       - JWT_GUEST_TOKEN_EXPIRY=${JWT_GUEST_TOKEN_EXPIRY:-604800}
       - GUEST_GENERATION_QUOTA=${GUEST_GENERATION_QUOTA:-1}
+      - GLOBAL_DAILY_GENERATION_CAP=${GLOBAL_DAILY_GENERATION_CAP:-20}
       - AI_SERVICE_URL=http://ai-service:8000
       - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY:?AI_SERVICE_API_KEY 必须配置}
       - AI_SERVICE_TIMEOUT=${AI_SERVICE_TIMEOUT:-180}
@@ -86,8 +87,11 @@ services:
       dockerfile: Dockerfile
     container_name: storycanvas-ai-service
     ports:
-      - "${AI_SERVICE_PORT:-8000}:8000"
+      # 只绑宿主机回环：容器内 Dockerfile 以 --host 0.0.0.0 监听，
+      # backend 走服务名 http://ai-service:8000 访问，不受此处绑定影响。
+      - "127.0.0.1:${AI_SERVICE_PORT:-8000}:8000"
     environment:
+      - ENVIRONMENT=production
       - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
       - IMAGE_PROVIDER=${IMAGE_PROVIDER:-doubao}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
@@ -103,6 +107,7 @@ services:
       - CORS_ORIGINS=["http://localhost:5173"]
       - STORAGE_PATH=/app/storage
       - MOCK_IMAGE_DELAY=${MOCK_IMAGE_DELAY:-1.5}
+      - TASK_RETRY_COUNT=${TASK_RETRY_COUNT:-2}
       - DEBUG=${DEBUG:-false}
     volumes:
       - ./storage:/app/storage

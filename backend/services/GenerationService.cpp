@@ -73,6 +73,21 @@ bool checkGuestQuota(const std::string &userId, bool isGuest, ServiceResult &res
 }
 
 /**
+ * 全站每日额度校验：今天所有用户创建的任务总数达到上限即拒绝（429）。
+ * 游客身份可无限重取，个人额度封顶不住共用系统 Key 的花费，故需全站上限。
+ */
+bool checkGlobalDailyQuota(ServiceResult &result) {
+    if (GenerationTaskRepository::countCreatedToday() < ConfigManager::globalDailyGenerationCap) {
+        return true;
+    }
+    result.code = 429;
+    result.message = "今日全站生成额度已用完（共 " +
+                     std::to_string(ConfigManager::globalDailyGenerationCap) +
+                     " 张），请明天再来";
+    return false;
+}
+
+/**
  * 校验绘本归属。
  * 返回 true 表示通过；否则把错误写入 result。
  */
@@ -249,7 +264,10 @@ ServiceResult GenerationService::createTask(const std::string &userId,
                                             const CreateGenerationRequest &req) {
     ServiceResult result;
 
-    // 0. 游客配额校验（用尽返回 429）
+    // 0. 成本封顶：先全站每日额度，再游客个人额度（用尽均返回 429）
+    if (!checkGlobalDailyQuota(result)) {
+        return result;
+    }
     if (!checkGuestQuota(userId, isGuest, result)) {
         return result;
     }
@@ -381,7 +399,10 @@ ServiceResult GenerationService::regenerate(const std::string &userId,
                                             const RegenerateRequest &req) {
     ServiceResult result;
 
-    // 重新生成同样消耗一张游客额度
+    // 重新生成同样消耗全站额度与一张游客额度
+    if (!checkGlobalDailyQuota(result)) {
+        return result;
+    }
     if (!checkGuestQuota(userId, isGuest, result)) {
         return result;
     }

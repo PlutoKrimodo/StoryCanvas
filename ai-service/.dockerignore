@@ -1,0 +1,14 @@
+# Dockerfile 的 `COPY . .` 会把下列内容烤进镜像层，其中 .env 含内部鉴权与厂商密钥
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/
+storage/
+.git/

@@ -22,6 +22,7 @@ int ConfigManager::jwtRefreshTokenExpiry = 604800;
 int ConfigManager::jwtGuestTokenExpiry = 604800;
 
 int ConfigManager::guestGenerationQuota = 1;
+int ConfigManager::globalDailyGenerationCap = 20;
 
 std::string ConfigManager::aiServiceUrl = "http://localhost:8000";
 std::string ConfigManager::aiServiceApiKey;
@@ -176,6 +177,10 @@ void ConfigManager::applyEnv() {
     guestGenerationQuota =
         toInt(resolve("GUEST_GENERATION_QUOTA", "guest", "generation_quota", "1"), 1);
 
+    globalDailyGenerationCap =
+        toInt(resolve("GLOBAL_DAILY_GENERATION_CAP", "quota", "global_daily_generation_cap", "20"),
+              20);
+
     aiServiceUrl = resolve("AI_SERVICE_URL", "ai_service", "url", "http://localhost:8000");
     aiServiceApiKey = resolve("AI_SERVICE_API_KEY", "ai_service", "api_key", "");
     // 图像生成可能耗时 10-120s，默认放宽到 180s，避免正常生成被误判超时
@@ -198,6 +203,10 @@ void ConfigManager::validate() {
     }
     if (dbPassword.empty()) {
         spdlog::warn("DB_PASSWORD 未配置，数据库连接可能失败");
+    }
+    if (globalDailyGenerationCap <= 0) {
+        spdlog::warn("GLOBAL_DAILY_GENERATION_CAP = {}（应大于 0）：全站每日额度将不生效",
+                     globalDailyGenerationCap);
     }
     if (encryptionKey.empty()) {
         spdlog::debug("ENCRYPTION_KEY 未配置：未启用敏感字段 AES 加密存储");

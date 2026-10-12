@@ -33,6 +33,9 @@ public:
     // Guest-first（T-1 能力层）
     static int guestGenerationQuota;  // 游客可免费生成的图片数（默认 1）
 
+    // 全站成本封顶：今天所有用户合计可创建的任务数上限
+    static int globalDailyGenerationCap;
+
     // AI Service
     static std::string aiServiceUrl;
     static std::string aiServiceApiKey;

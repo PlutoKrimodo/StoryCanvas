@@ -205,6 +205,23 @@ int GenerationTaskRepository::countByUserAndStatus(const std::string &userId,
     }
 }
 
+int GenerationTaskRepository::countCreatedToday() {
+    try {
+        auto db = drogon::app().getDbClient();
+        // created_at 是 TIMESTAMPTZ，裸 date_trunc('day', now()) 按 UTC 切日，
+        // 会出现早上 8 点才重置的偏差，故显式按 Asia/Shanghai 取当日零点。
+        // 不按状态过滤：failed 已计费，cancelled 也可能发生在 Ark 调用发出之后。
+        auto result = db->execSqlSync(
+            "SELECT COUNT(*)::int AS cnt FROM generation_tasks "
+            "WHERE created_at >= ("
+            "date_trunc('day', now() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai')");
+        return result.empty() ? 0 : result[0]["cnt"].as<int>();
+    } catch (const std::exception &e) {
+        spdlog::error("统计今日全站任务数失败: {}", e.what());
+        return 0;
+    }
+}
+
 int GenerationTaskRepository::failStaleTasks() {
     try {
         auto db = drogon::app().getDbClient();
