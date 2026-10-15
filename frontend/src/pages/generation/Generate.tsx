@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { App, Button, Card, Col, Row, Typography } from 'antd'
 
 import GenerationForm from '../../components/ai/GenerationForm'
@@ -10,6 +10,7 @@ import SaveToBookModal from '../../components/ai/SaveToBookModal'
 import AppLayout from '../../components/layout/AppLayout'
 import PageHeader from '../../components/layout/PageHeader'
 import { useGeneration } from '../../hooks/useGeneration'
+import { useAuthStore } from '../../stores/authStore'
 import { useGenerationStore } from '../../stores/generationStore'
 import { ArtStyle, TaskStatus, type GenerationRequest, type TaskResult } from '../../types/generation'
 
@@ -29,8 +30,10 @@ interface ReuseState {
  */
 function Generate() {
   const { message } = App.useApp()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const bookId = searchParams.get('bookId') ?? undefined
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
   const { currentTask, polling, createTask, regenerate, cancel, reset } = useGeneration()
   const fetchHistory = useGenerationStore((state) => state.fetchHistory)
@@ -130,6 +133,13 @@ function Generate() {
                 task={currentTask}
                 onRegenerate={handleRegenerate}
                 onSaveToBook={(imageId) => {
+                  // Q3②：游客不能写绘本（后端 MemberFilter 也会 403）；
+                  // 直接引导登录，避免进入「你还没有绘本」的死路弹窗
+                  if (!isAuthenticated) {
+                    message.info('登录后即可保存到绘本')
+                    navigate('/login')
+                    return
+                  }
                   setSavingImageId(imageId)
                   setSaveOpen(true)
                 }}

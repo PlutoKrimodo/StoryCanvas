@@ -95,7 +95,9 @@ function GuestGenerator() {
           type="warning"
           showIcon
           message="生成未成功"
-          description="游客额度可能已用完；登录后可保存图片到绘本，并解锁更多生成次数。"
+          // 具体失败原因由上方 GenerationProgress 的错误条展示（Q8）；
+          // 这里只补「下一步怎么办」，不再重复消息，也不臆断为额度问题
+          description="可稍后重试或调整参数；登录后可保存图片到绘本，并解锁更多生成次数。"
           action={
             <Button size="small" type="primary" onClick={() => navigate('/login')}>
               去登录

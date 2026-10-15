@@ -1,8 +1,9 @@
 #include <gtest/gtest.h>
 
-#include <ctime>
+#include <chrono>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 #include "utils/JwtUtils.h"
 
@@ -11,6 +12,13 @@ namespace {
 constexpr char kSecret[] = "unit-test-secret-not-for-production";
 constexpr int kAccessExpiry = 3600;
 constexpr int kRefreshExpiry = 604800;
+
+/** 与 JwtUtils 内部一致的浮点秒时钟，用于断言撤销边界 */
+double nowSeconds() {
+    return std::chrono::duration<double>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
 
 class JwtUtilsTest : public ::testing::Test {
 protected:
@@ -105,11 +113,31 @@ TEST_F(JwtUtilsTest, RevokeAllForUserInvalidatesEveryTokenOfThatUser) {
     const TokenPair tokens = JwtUtils::generateTokenPair("user-pwd", "alice");
     ASSERT_TRUE(JwtUtils::verifyToken(tokens.accessToken, "access").has_value());
 
+    const double issuedBefore = nowSeconds();  // 撤销前的时刻（浮点秒）
     JwtUtils::revokeAllForUser("user-pwd");
 
     EXPECT_FALSE(JwtUtils::verifyToken(tokens.accessToken, "access").has_value());
     EXPECT_FALSE(JwtUtils::verifyToken(tokens.refreshToken, "refresh").has_value());
-    EXPECT_TRUE(JwtUtils::isUserTokenRevoked("user-pwd", std::time(nullptr)));
+    // 撤销时刻之前签发的时间戳一律失效；之后签发的（如改密后重登新 Token）见回归用例
+    EXPECT_TRUE(JwtUtils::isUserTokenRevoked("user-pwd", issuedBefore));
+}
+
+/**
+ * 回归（2026-10-15）：改密与重新登录落在同一秒（脚本 / 自动化常见）时，
+ * 新 Token 不得被整用户撤销误伤——iat 与撤销时刻均为毫秒级浮点秒。
+ */
+TEST_F(JwtUtilsTest, FreshLoginRightAfterRevokeAllIsNotRevoked) {
+    JwtUtils::revokeAllForUser("user-relogin");
+    // 模拟改密与重登之间的微小间隔（旧实现的秒级粒度会吃掉整个同一秒）
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+
+    const TokenPair fresh = JwtUtils::generateTokenPair("user-relogin", "alice");
+    const auto payload = JwtUtils::verifyToken(fresh.accessToken, "access");
+
+    ASSERT_TRUE(payload.has_value());
+    EXPECT_FALSE(JwtUtils::isUserTokenRevoked("user-relogin", payload->issuedAt));
+    // 安全语义不变：撤销时刻之前签发的 Token 仍然失效
+    EXPECT_TRUE(JwtUtils::isUserTokenRevoked("user-relogin", nowSeconds() - 1.0));
 }
 
 TEST_F(JwtUtilsTest, GuestTokenIsAccessTypeAndMarkedGuest) {
@@ -137,5 +165,5 @@ TEST_F(JwtUtilsTest, RevokeAllForUserDoesNotAffectOtherUsers) {
 
     const TokenPair other = JwtUtils::generateTokenPair("user-b", "bob");
     EXPECT_TRUE(JwtUtils::verifyToken(other.accessToken, "access").has_value());
-    EXPECT_FALSE(JwtUtils::isUserTokenRevoked("user-b", std::time(nullptr)));
+    EXPECT_FALSE(JwtUtils::isUserTokenRevoked("user-b", nowSeconds()));
 }

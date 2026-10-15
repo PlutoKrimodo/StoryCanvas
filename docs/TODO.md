@@ -48,7 +48,7 @@
 | 路由守卫 | `frontend/src/App.tsx` | `/` 包在 `ProtectedRoute` 内，未登录跳 `/login` | 需改为 `/` 公开、生成器上首屏 |
 | 接口契约 | `docs/04` §8、`backend/controllers/BookController.h` | 生成 / 绘本接口均挂 `JwtFilter`，无 Token 返回 401 | ✅ 已通过「游客 Token」解决（`POST /auth/guest` 签发游客 JWT） |
 | 数据模型 | `sql/init.sql` | `books.user_id`、`generation_tasks.user_id`、`generated_images.user_id` 均为 `NOT NULL` 外键 | ✅ 已通过「影子游客用户」解决（`users.is_guest`，外键仍 NOT NULL，认领时转移归属） |
-| 已预留 | `docs/16` §7.4 | 限流已设「**匿名** 100 次/分、认证 1000 次/分、AI 生成 10 次/分」 | 说明设计上本就允许匿名请求，只是未用到生成上 |
+| 限流预留 | `docs/16` §7.4 | ✅ 已落地（2026-10-15）：匿名 100 次/分（IP）、认证 1000 次/分（用户）、AI 生成 10 次/分、游客签发 10 次/分 | 说明设计上本就允许匿名请求，此前只是未用到生成上 |
 | 生成前端 | `frontend/src/pages/generation/Generate.tsx` + `components/ai/` | ✅ Phase 5 已实现 | 「首页即生成器」只差把它搬上首页 |
 
 **结论**：观感便宜、能力昂贵。两者要拆开评估。
@@ -105,7 +105,7 @@ Phase 4 (AI 基础) → Phase 5 (生成闭环·核心) → Phase 6 (预览/历�
 | 2 | 匿名额度记在哪 | 内存 / Redis / 数据库 | **数据库**（按游客用户统计 pending/processing/completed 任务数，进程重启不清零） |
 | 3 | 匿名结果归属 | 影子用户 / `user_id` 允许为空 / 仅临时存储 | **影子用户**（`users.is_guest`，外键仍 NOT NULL，零侵入复用既有归属校验） |
 | 4 | 注册后能否「认领」 | 是 / 否 | **是**（注册/登录携带 `guest_id`，后端转移任务/图片/绘本归属并停用游客） |
-| 5 | 防刷强度 | 与 Provider（Mock / 真实）挂钩 | 配额限制（`GUEST_GENERATION_QUOTA`，默认 1）；接入真实 API 后建议再叠第 12 章的限流 |
+| 5 | 防刷强度 | 与 Provider（Mock / 真实）挂钩 | 配额限制（`GUEST_GENERATION_QUOTA`，默认 1）；✅ 2026-10-15 起叠加接口限流：游客签发 10 次/分（IP）、生成 10 次/分（用户），见 `docs/10` §4.1 |
 
 ### 7. 涉及模块（后续定位用）
 

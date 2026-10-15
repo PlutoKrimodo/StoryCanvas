@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
+#include <chrono>
 #include <stdexcept>
 #include <vector>
 
@@ -18,11 +19,18 @@ int JwtUtils::guestTokenExpiry_ = 604800;
 
 std::mutex JwtUtils::mutex_;
 std::set<std::string> JwtUtils::revokedJtis_;
-std::unordered_map<std::string, time_t> JwtUtils::userRevokedBefore_;
+std::unordered_map<std::string, double> JwtUtils::userRevokedBefore_;
 
 namespace {
 
 constexpr char kHeaderJson[] = R"({"alg":"HS256","typ":"JWT"})";
+
+/** 当前时间（浮点秒，毫秒级以上精度；RFC 7519 NumericDate 允许非整数） */
+double nowSeconds() {
+    return std::chrono::duration<double>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
 
 std::vector<std::string> splitToken(const std::string &token) {
     std::vector<std::string> segments;
@@ -69,15 +77,15 @@ std::string JwtUtils::buildToken(const std::string &userId,
                                  int expirySeconds,
                                  bool isGuest) {
     spdlog::debug("JWT buildToken: type={}, guest={}", type, isGuest);
-    const time_t now = std::time(nullptr);
+    const double now = nowSeconds();
 
     json payload = {
         {"sub", userId},
         {"username", username},
         {"type", type},
         {"jti", jti},
-        {"iat", static_cast<long long>(now)},
-        {"exp", static_cast<long long>(now + expirySeconds)},
+        {"iat", now},
+        {"exp", now + expirySeconds},
     };
     if (isGuest) {
         payload["guest"] = true;
@@ -146,13 +154,13 @@ std::optional<TokenPayload> JwtUtils::verifyToken(const std::string &token,
         result.type = payload.value("type", "access");
         result.jti = payload.value("jti", "");
         result.isGuest = payload.value("guest", false);
-        result.issuedAt = payload.at("iat").get<long long>();
-        result.expiresAt = payload.at("exp").get<long long>();
+        result.issuedAt = payload.at("iat").get<double>();
+        result.expiresAt = payload.at("exp").get<double>();
     } catch (const std::exception &) {
         return std::nullopt;
     }
 
-    if (std::time(nullptr) >= result.expiresAt) {
+    if (nowSeconds() >= result.expiresAt) {
         return std::nullopt;
     }
 
@@ -223,7 +231,7 @@ void JwtUtils::revokeAllForUser(const std::string &userId) {
     if (userId.empty()) {
         return;
     }
-    const time_t revokedAt = std::time(nullptr);
+    const double revokedAt = nowSeconds();
     {
         std::lock_guard<std::mutex> lock(mutex_);
         userRevokedBefore_[userId] = revokedAt;
@@ -232,7 +240,7 @@ void JwtUtils::revokeAllForUser(const std::string &userId) {
     spdlog::info("JWT: 已撤销某用户全部历史 Token");
 }
 
-bool JwtUtils::isUserTokenRevoked(const std::string &userId, time_t issuedAt) {
+bool JwtUtils::isUserTokenRevoked(const std::string &userId, double issuedAt) {
     if (userId.empty()) {
         return false;
     }
@@ -241,7 +249,8 @@ bool JwtUtils::isUserTokenRevoked(const std::string &userId, time_t issuedAt) {
     if (it == userRevokedBefore_.end()) {
         return false;
     }
-    // iat 为秒级精度：同秒签发的 Token 也视为失效，避免改密当秒的旧 Token 残留
+    // 撤销时刻与 iat 同为浮点秒（毫秒级以上精度）：撤销瞬时及之前的 Token 全部失效，
+    // 之后签发的新 Token（如改密后立即重登）不再被误伤
     return issuedAt <= it->second;
 }
 

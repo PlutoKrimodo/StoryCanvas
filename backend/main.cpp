@@ -7,6 +7,7 @@
 
 #include "filters/CorsFilter.h"
 #include "filters/CorsHeaders.h"
+#include "filters/RateLimitFilter.h"
 #include "services/GenerationService.h"
 #include "utils/ConfigManager.h"
 #include "utils/JwtUtils.h"
@@ -63,6 +64,10 @@ int main() {
 
     // 4. 全局跨域过滤器（仅处理 OPTIONS 预检）
     app.registerFilter(std::make_shared<CorsFilter>());
+
+    // 4.5 全局限流（Q5）：同步 advice 覆盖全部请求（含未匹配路由）；
+    //     规格 docs/16 §7.4，实现 filters/RateLimitFilter，配置见 .env 的 RATE_LIMIT_*
+    RateLimitFilter::registerGlobalAdvice();
 
     // 5. CORS 头由 CorsFilter 统一处理
 

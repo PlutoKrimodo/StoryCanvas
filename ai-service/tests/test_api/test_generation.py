@@ -46,3 +46,19 @@ def test_generate_defaults_book_to_unassigned(client: TestClient, storage_root):
 def test_generate_rejects_empty_text(client: TestClient):
     resp = client.post("/api/v1/images/generate", json={"text": ""})
     assert resp.status_code == 422
+
+
+def test_generate_rejects_oversize_image_with_readable_reason(client: TestClient, monkeypatch):
+    """Q8：超过 MAX_IMAGE_SIZE 的生成图必须给出可读失败原因（透传任务 error_message）。"""
+    from app.utils.config import settings
+
+    monkeypatch.setattr(settings, "MAX_IMAGE_SIZE", 1000)
+    resp = client.post("/api/v1/images/generate", json={"text": "一只小猫"})
+
+    assert resp.status_code == 502
+    body = resp.json()
+    assert body["status"] == "error"
+    # 文案需说清「为什么失败」：包含大小上限字样、实际大小与上限数值
+    # （上限被测试压到 1000 字节，验证 B/KB 级格式化不出现 "0.0MB > 0MB"）
+    assert "大小上限" in body["message"]
+    assert "1000B" in body["message"]

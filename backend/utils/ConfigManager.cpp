@@ -2,6 +2,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <stdexcept>
@@ -23,6 +25,13 @@ int ConfigManager::jwtGuestTokenExpiry = 604800;
 
 int ConfigManager::guestGenerationQuota = 1;
 int ConfigManager::globalDailyGenerationCap = 20;
+
+// 接口限流默认值与 docs/16 §7.4 一致；游客会话签发沿用 T-1 的防刷口径
+bool ConfigManager::rateLimitEnabled = true;
+int ConfigManager::rateLimitAnonPerMin = 100;
+int ConfigManager::rateLimitAuthPerMin = 1000;
+int ConfigManager::rateLimitGenerationPerMin = 10;
+int ConfigManager::rateLimitGuestTokenPerMin = 10;
 
 std::string ConfigManager::aiServiceUrl = "http://localhost:8000";
 std::string ConfigManager::aiServiceApiKey;
@@ -160,6 +169,19 @@ void ConfigManager::applyEnv() {
         }
     };
 
+    auto toBool = [](const std::string &text, bool fallback) -> bool {
+        std::string lower = text;
+        std::transform(lower.begin(), lower.end(), lower.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (lower == "true" || lower == "1" || lower == "yes" || lower == "on") {
+            return true;
+        }
+        if (lower == "false" || lower == "0" || lower == "no" || lower == "off") {
+            return false;
+        }
+        return fallback;
+    };
+
     dbHost = resolve("DB_HOST", "database", "host", "localhost");
     dbPort = toInt(resolve("DB_PORT", "database", "port", "5432"), 5432);
     dbName = resolve("DB_NAME", "database", "database", "storycanvas");
@@ -180,6 +202,20 @@ void ConfigManager::applyEnv() {
     globalDailyGenerationCap =
         toInt(resolve("GLOBAL_DAILY_GENERATION_CAP", "quota", "global_daily_generation_cap", "20"),
               20);
+
+    // 限流（Q5）：匿名按 IP、认证按用户、生成接口按身份、游客会话签发按 IP
+    rateLimitEnabled =
+        toBool(resolve("RATE_LIMIT_ENABLED", "rate_limit", "enabled", "true"), true);
+    rateLimitAnonPerMin =
+        toInt(resolve("RATE_LIMIT_ANON_PER_MIN", "rate_limit", "anon_per_min", "100"), 100);
+    rateLimitAuthPerMin =
+        toInt(resolve("RATE_LIMIT_AUTH_PER_MIN", "rate_limit", "auth_per_min", "1000"), 1000);
+    rateLimitGenerationPerMin =
+        toInt(resolve("RATE_LIMIT_GENERATION_PER_MIN", "rate_limit", "generation_per_min", "10"),
+              10);
+    rateLimitGuestTokenPerMin =
+        toInt(resolve("RATE_LIMIT_GUEST_TOKEN_PER_MIN", "rate_limit", "guest_token_per_min", "10"),
+              10);
 
     aiServiceUrl = resolve("AI_SERVICE_URL", "ai_service", "url", "http://localhost:8000");
     aiServiceApiKey = resolve("AI_SERVICE_API_KEY", "ai_service", "api_key", "");
@@ -207,6 +243,15 @@ void ConfigManager::validate() {
     if (globalDailyGenerationCap <= 0) {
         spdlog::warn("GLOBAL_DAILY_GENERATION_CAP = {}（应大于 0）：全站每日额度将不生效",
                      globalDailyGenerationCap);
+    }
+    if (!rateLimitEnabled) {
+        spdlog::warn("RATE_LIMIT_ENABLED=false：接口限流已关闭（仅建议开发 / 压测使用）");
+    } else if (rateLimitAnonPerMin <= 0 || rateLimitAuthPerMin <= 0 ||
+               rateLimitGenerationPerMin <= 0 || rateLimitGuestTokenPerMin <= 0) {
+        spdlog::warn("限流额度存在 <=0 的档位（匿名 {} / 认证 {} / 生成 {} / 游客会话 {}）："
+                     "该档位将不限制",
+                     rateLimitAnonPerMin, rateLimitAuthPerMin,
+                     rateLimitGenerationPerMin, rateLimitGuestTokenPerMin);
     }
     if (encryptionKey.empty()) {
         spdlog::debug("ENCRYPTION_KEY 未配置：未启用敏感字段 AES 加密存储");

@@ -36,6 +36,13 @@ public:
     // 全站成本封顶：今天所有用户合计可创建的任务数上限
     static int globalDailyGenerationCap;
 
+    // 接口限流（Q5 / Q3①，规格见 docs/16 §7.4，实现在 filters/RateLimitFilter）
+    static bool rateLimitEnabled;             // 总开关（开发 / 压测可关）
+    static int rateLimitAnonPerMin;           // 匿名（按 IP）每分钟上限
+    static int rateLimitAuthPerMin;           // 认证（按用户）每分钟上限
+    static int rateLimitGenerationPerMin;     // AI 生成接口（创建 / 重新生成）每分钟上限
+    static int rateLimitGuestTokenPerMin;     // 游客会话签发（按 IP）每分钟上限
+
     // AI Service
     static std::string aiServiceUrl;
     static std::string aiServiceApiKey;

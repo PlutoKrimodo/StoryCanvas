@@ -20,6 +20,7 @@ add_executable(storycanvas_tests
     test_jwt_utils.cpp
     test_encryption_utils.cpp
     test_file_utils.cpp
+    test_rate_limiter.cpp
     ${UTIL_SOURCES}
 )
 

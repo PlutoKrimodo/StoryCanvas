@@ -32,6 +32,19 @@ _MAX_SIZE = 2048
 _MIN_AREA = 921600
 
 
+def _format_size(num_bytes: int) -> str:
+    """人类可读的字节数（Q8 失败文案用）。
+
+    上限可经 MAX_IMAGE_SIZE 配置为任意值（联调/验收时常用极小值），
+    因此不能一律按 MB 取整——小于 1MB 时退化为 KB / B。
+    """
+    if num_bytes < 1024:
+        return f"{num_bytes}B"
+    if num_bytes < 1024 * 1024:
+        return f"{num_bytes / 1024:.1f}KB"
+    return f"{num_bytes / (1024 * 1024):.1f}MB"
+
+
 class GenerationService(BaseService):
     """一站式图像生成编排。"""
 
@@ -110,8 +123,12 @@ class GenerationService(BaseService):
         # 4. 二进制化 + 落盘
         data, content_type = await self.image_generator.materialize(result)
         if len(data) > settings.MAX_IMAGE_SIZE:
+            # Q8：错误信息直接透传到后端任务 error_message 与前端失败提示，
+            # 必须说清「为什么失败、可以怎么办」，避免答辩现场只有「生成失败」
             raise AIServiceException(
-                f"生成图超过大小上限（{len(data)} > {settings.MAX_IMAGE_SIZE}）", 502
+                f"生成图片超过大小上限（{_format_size(len(data))} > "
+                f"{_format_size(settings.MAX_IMAGE_SIZE)}），已中止保存；请重试或调整参数",
+                502,
             )
 
         image_id = new_image_id()

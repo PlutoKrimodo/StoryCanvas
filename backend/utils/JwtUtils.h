@@ -14,8 +14,10 @@ struct TokenPayload {
     std::string type;  // "access" | "refresh"
     std::string jti;   // Token 唯一标识，用于撤销
     bool isGuest = false;  // 是否为游客会话（Guest-first，用于配额控制）
-    time_t issuedAt = 0;
-    time_t expiresAt = 0;
+    // 浮点秒（毫秒级以上精度，RFC 7519 NumericDate 允许非整数）：
+    // 用于「改密后同秒重登不被误伤」的整用户撤销比对（见 revokeAllForUser）
+    double issuedAt = 0;
+    double expiresAt = 0;
 };
 
 /** Access / Refresh 双 Token */
@@ -73,14 +75,14 @@ public:
      *
      * 用途：修改密码后强制该用户所有会话重新登录（见 docs/16 第 6.6.1 节）。
      *
-     * 注意：JWT 的 iat 只有秒级精度，因此撤销粒度为 1 秒——若用户在同一秒内
-     * 完成「改密 + 重新登录」，新 Token 会被一并拒绝，需再次登录（可接受）。
+     * 撤销时刻与 iat 均为浮点秒（毫秒级以上精度）：撤销瞬时及之前签发的 Token 失效，
+     * 「改密后立即重新登录」拿到的新 Token 因时间戳严格更大而放行，不再被误伤。
      * 撤销记录保存在进程内存，重启后失效；MVP 阶段可接受，后续可迁移到 Redis。
      */
     static void revokeAllForUser(const std::string &userId);
 
-    /** 判断某用户在 issuedAt 时刻签发的 Token 是否已因整用户撤销而失效 */
-    static bool isUserTokenRevoked(const std::string &userId, time_t issuedAt);
+    /** 判断某用户在 issuedAt（浮点秒）时刻签发的 Token 是否已因整用户撤销而失效 */
+    static bool isUserTokenRevoked(const std::string &userId, double issuedAt);
 
     /** 清空全部撤销记录（仅供测试使用） */
     static void resetRevocations();
@@ -102,6 +104,6 @@ private:
 
     static std::mutex mutex_;
     static std::set<std::string> revokedJtis_;
-    /** userId -> 撤销生效时间戳，早于该时刻签发的 Token 一律失效 */
-    static std::unordered_map<std::string, time_t> userRevokedBefore_;
+    /** userId -> 撤销生效时间（浮点秒），早于该时刻签发的 Token 一律失效 */
+    static std::unordered_map<std::string, double> userRevokedBefore_;
 };
