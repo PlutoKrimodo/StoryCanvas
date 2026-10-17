@@ -17,3 +17,12 @@ struct SavePageRequest {
     bool validate() const;
     std::vector<FieldError> getErrors() const;
 };
+
+/** 整组图片按顺序写入连续页。 */
+struct SaveBatchPagesRequest {
+    std::vector<std::string> imageIds;
+
+    static SaveBatchPagesRequest fromJson(const json &j);
+    bool validate() const;
+    std::vector<FieldError> getErrors() const;
+};

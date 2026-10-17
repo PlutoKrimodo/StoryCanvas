@@ -79,6 +79,28 @@ bool isGenerationCreate(const drogon::HttpRequestPtr &req) {
     return req->method() == drogon::Post && req->path() == "/api/v1/generation";
 }
 
+bool startsWith(const std::string &text, const std::string &prefix) {
+    return text.rfind(prefix, 0) == 0;
+}
+
+bool endsWith(const std::string &text, const std::string &suffix) {
+    return text.size() >= suffix.size() &&
+           text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+/** 对话式生成：分镜规划、批次启动、单格重画都会产生真实 LLM / 图像调用。 */
+bool isBatchGenerationRequest(const drogon::HttpRequestPtr &req) {
+    if (req->method() != drogon::Post) {
+        return false;
+    }
+    const std::string path = req->path();
+    if (path == "/api/v1/generation/plans") {
+        return true;
+    }
+    return startsWith(path, "/api/v1/generation/batches/") &&
+           (endsWith(path, "/start") || endsWith(path, "/regenerate"));
+}
+
 /** 重新生成同样触发一次真实计费调用，一并限频 */
 bool isGenerationRegenerate(const drogon::HttpRequestPtr &req) {
     const std::string &path = req->path();
@@ -176,8 +198,9 @@ drogon::HttpResponsePtr RateLimitFilter::check(const drogon::HttpRequestPtr &req
         }
     }
 
-    // AI 生成：任务创建与重新生成都会产生真实计费调用（Q5）
-    if (isGenerationCreate(req) || isGenerationRegenerate(req)) {
+    // AI 生成：任务创建、重新生成、分镜规划与批次启动都会产生真实计费调用（Q5）
+    if (isGenerationCreate(req) || isGenerationRegenerate(req) ||
+        isBatchGenerationRequest(req)) {
         if (!RateLimiter::allow("generation:" + identityKey,
                                 ConfigManager::rateLimitGenerationPerMin,
                                 kWindowSeconds)) {

@@ -1,75 +1,48 @@
 import { cleanup, fireEvent, screen } from '@testing-library/react'
-import { Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Generate from './Generate'
 import { renderWithTheme } from '../../test/renderWithTheme'
 import { useAuthStore } from '../../stores/authStore'
-import { useGenerationStore } from '../../stores/generationStore'
-import { TaskStatus } from '../../types/generation'
-import { ART_STYLE_OPTIONS } from '../../utils/constants'
 
-vi.mock('../../api/generation', () => ({
-  generationApi: {
-    getHistory: () => Promise.resolve({ data: { data: { items: [], total: 0 } } }),
+vi.mock('../../api/conversations', () => ({
+  conversationsApi: {
+    list: () => Promise.resolve({ data: { data: { items: [], total: 0 } } }),
+    get: () => Promise.resolve({ data: { data: null } }),
+    getBatch: () => Promise.resolve({ data: { data: null } }),
+    createPlan: () => Promise.resolve({ data: { data: null } }),
+    updatePlan: () => Promise.resolve({ data: { data: null } }),
+    startBatch: () => Promise.resolve({ data: { data: null } }),
+    cancelBatch: () => Promise.resolve({ data: { data: null } }),
+    regeneratePanel: () => Promise.resolve({ data: { data: null } }),
+    remove: () => Promise.resolve({ data: { data: null } }),
   },
 }))
 
-describe('生成页接入新体系（docs/17 Step 9 冒烟）', () => {
+describe('对话式生成页', () => {
   afterEach(() => {
     cleanup()
-    useGenerationStore.setState({ currentTask: null, polling: false })
+    useAuthStore.setState({ isAuthenticated: false, user: null })
   })
 
-  it('无任务时：PageHeader + 表单卡 + 引导占位 + 历史卡一次性挂载', async () => {
-    const { container } = renderWithTheme(<Generate />, { at: '/generate' })
+  it('游客：展示创作引导、常驻参数与单张限制', () => {
+    renderWithTheme(<Generate />, { at: '/generate' })
 
-    expect(screen.getByRole('heading', { name: 'AI 绘本插画生成' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /生成插画/ })).toBeInTheDocument()
-    expect(screen.getByText('生成历史')).toBeInTheDocument()
-    ART_STYLE_OPTIONS.forEach((option) => {
-      expect(
-        screen.getByRole('button', { name: new RegExp(option.label) }),
-      ).toBeInTheDocument()
-    })
-
-    // 历史为空 → 占位文案；同时说明 store 的异步 fetch 能在 act 内收敛
-    expect(await screen.findByText('还没有生成记录')).toBeInTheDocument()
-    expect(screen.getByText(/生成结果会显示在这里/)).toBeInTheDocument()
-
-    // 底色只由 AppLayout 单点提供，页面自身不再叠一层满屏容器
-    expect(container.querySelectorAll('.min-h-screen')).toHaveLength(1)
-    expect(container.querySelector('.bg-gradient-to-br')).toBeNull()
+    expect(screen.getByRole('heading', { name: '创作对话' })).toBeInTheDocument()
+    expect(screen.getByText(/把一个故事，聊成一本连环画/)).toBeInTheDocument()
+    expect(screen.getByText(/游客可免费生成 1 张/)).toBeInTheDocument()
+    expect(screen.getByText('卡通风格')).toBeInTheDocument()
+    expect(screen.getByText('1024 × 1024（方形·推荐）')).toBeInTheDocument()
+    expect(screen.getByText('1 张')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '发送' })).toBeDisabled()
   })
 
-  it('游客点击「保存到绘本」：引导登录而非死路弹窗（Q3②）', () => {
-    useAuthStore.setState({
-      isAuthenticated: false,
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-    })
-    useGenerationStore.setState({
-      currentTask: {
-        task_id: 't9',
-        status: TaskStatus.COMPLETED,
-        prompt: '',
-        created_at: new Date().toISOString(),
-        result: { image_id: 'img-1', image_url: '/api/v1/images/img-1/raw' },
-      },
-      polling: false,
-    })
+  it('点击示例提示会回填输入框', () => {
+    renderWithTheme(<Generate />, { at: '/generate' })
 
-    renderWithTheme(
-      <Routes>
-        <Route path="/generate" element={<Generate />} />
-        <Route path="/login" element={<div>登录页占位</div>} />
-      </Routes>,
-      { at: '/generate' },
+    fireEvent.click(screen.getByText(/小女孩在雨后的森林里/))
+    expect(screen.getByRole('textbox')).toHaveValue(
+      '小女孩在雨后的森林里发现一只受伤的小鸟，她把它捧在手心带回家。',
     )
-
-    fireEvent.click(screen.getByRole('button', { name: /保存到绘本/ }))
-
-    expect(screen.getByText('登录页占位')).toBeInTheDocument()
   })
 })

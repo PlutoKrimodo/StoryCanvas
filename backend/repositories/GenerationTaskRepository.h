@@ -20,6 +20,12 @@ public:
     /** 按 ID 查询（含最近一张生成图的派生字段）。 */
     static std::optional<GenerationTask> findById(const std::string &id);
 
+    /** 按批次查询任务（按 panel_index 升序）。 */
+    static std::optional<std::vector<GenerationTask>> findByBatchId(const std::string &batchId);
+
+    /** 重置任务以便单格重画（保留 ID / 批次归属，清空结果）。 */
+    static bool resetForRetry(const std::string &taskId, const std::string &panelText);
+
     /** 按用户分页查询（bookId 为空表示不筛选），按创建时间倒序。
      *  返回 nullopt 表示「查询失败」，与「确实没有数据」的空列表区分开（服务层转 500）。 */
     static std::optional<std::vector<GenerationTask>> findByUserId(const std::string &userId,

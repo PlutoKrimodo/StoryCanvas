@@ -42,6 +42,17 @@ public:
                                     const std::string &taskId,
                                     const RegenerateRequest &req);
 
+    /** 批次/单格共用的额度预检：count 张、BYOK 双项时豁免系统额度。 */
+    static bool checkImageQuota(const std::string &userId,
+                                bool isGuest,
+                                int count,
+                                bool byokLlm,
+                                bool byokImage,
+                                ServiceResult &result);
+
+    /** 供批次服务把已落库的 pending 任务加入内存队列。 */
+    static bool enqueueTask(const std::string &taskId);
+
 private:
     static bool enqueue(const std::string &taskId);
     static void workerLoop();

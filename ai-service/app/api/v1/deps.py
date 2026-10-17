@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Dict, Type
+from typing import Dict, Optional, Type
 
 from fastapi import Header, HTTPException
 
@@ -21,6 +21,7 @@ from ...providers.llm.deepseek_provider import DeepSeekProvider
 from ...providers.llm.mock_provider import MockLLMProvider
 from ...providers.llm.openai_compatible import OpenAICompatibleProvider
 from ...services.generation_service import GenerationService
+from ...services.storyboard_service import StoryboardService
 from ...utils.exceptions import ImageProviderException, LLMProviderException
 from ...services.image_generator import ImageGeneratorService
 from ...services.prompt_optimizer import PromptOptimizerService
@@ -108,6 +109,12 @@ def build_image_provider(credential: ImageCredential) -> ImageProvider:
             api_base=credential.api_base,
         )
     raise ImageProviderException(f"不支持的图像厂商：{credential.provider}", 422)
+
+
+def build_storyboard_service(credential: Optional[LLMCredential]) -> StoryboardService:
+    """分镜与出图使用同一套 BYOK 口径：有用户凭据就按请求构造 Provider。"""
+    provider = build_llm_provider(credential) if credential is not None else get_llm_provider()
+    return StoryboardService(provider)
 
 
 def build_generation_service(request: ImageGenerateRequest) -> GenerationService:

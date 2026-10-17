@@ -2,6 +2,7 @@
 
 #include <nlohmann/json.hpp>
 #include <string>
+#include <vector>
 
 using json = nlohmann::json;
 
@@ -16,6 +17,21 @@ struct AiImageResult {
     std::string negativePrompt;
     json parsedData = json(nullptr);
     std::string modelUsed;
+};
+
+/** 分镜规划结果（LLM 一次调用产出）。 */
+struct AiStoryboardPanel {
+    int index = 0;
+    std::string text;
+};
+
+struct AiStoryboardResult {
+    std::string title;
+    json parsedData = nullptr;
+    json consistency = json::object();
+    std::string consistencyPrompt;
+    std::string negativePrompt;
+    std::vector<AiStoryboardPanel> panels;
 };
 
 /** 凭据测试结果（AI 服务已把厂商错误归一为可读 message）。 */
@@ -44,9 +60,23 @@ public:
                               const std::string &bookId,
                               const std::string &taskId,
                               const json &parameters,
+                              const json &parsedData,
+                              const std::string &consistencyPrompt,
+                              const std::string &negativePromptExtra,
                               const json &credentials,
                               AiImageResult &out,
                               std::string &error);
+
+    /**
+     * 调用 `POST {AI_SERVICE_URL}/api/v1/analysis/storyboard`（60 秒超时）。
+     * llmCredential 为空对象表示使用系统 LLM。
+     */
+    static bool generateStoryboard(const std::string &text,
+                                   int imageCount,
+                                   const std::string &style,
+                                   const json &llmCredential,
+                                   AiStoryboardResult &out,
+                                   std::string &error);
 
     /**
      * 调用 `POST {AI_SERVICE_URL}/api/v1/credentials/test`（10 秒超时）。

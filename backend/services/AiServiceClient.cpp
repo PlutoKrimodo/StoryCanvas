@@ -81,6 +81,9 @@ bool AiServiceClient::generateImage(const std::string &text,
                                     const std::string &bookId,
                                     const std::string &taskId,
                                     const json &parameters,
+                                    const json &parsedData,
+                                    const std::string &consistencyPrompt,
+                                    const std::string &negativePromptExtra,
                                     const json &credentials,
                                     AiImageResult &out,
                                     std::string &error) {
@@ -92,6 +95,15 @@ bool AiServiceClient::generateImage(const std::string &text,
     if (!userId.empty()) payload["user_id"] = userId;
     if (!bookId.empty()) payload["book_id"] = bookId;
     if (!taskId.empty()) payload["task_id"] = taskId;
+    if (!parsedData.is_null()) {
+        payload["parsed_data"] = parsedData;
+    }
+    if (!consistencyPrompt.empty()) {
+        payload["consistency_prompt"] = consistencyPrompt;
+    }
+    if (!negativePromptExtra.empty()) {
+        payload["negative_prompt_extra"] = negativePromptExtra;
+    }
     // BYOK：只放本次请求所需的解密凭据，任务 parameters 中绝不携带 Key
     if (credentials.is_object()) {
         if (credentials.contains("llm_credential")) {
@@ -229,5 +241,109 @@ bool AiServiceClient::testCredential(const std::string &capability,
                  static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
                                       std::chrono::steady_clock::now() - started)
                                       .count()));
+    return true;
+}
+
+bool AiServiceClient::generateStoryboard(const std::string &text,
+                                         int imageCount,
+                                         const std::string &style,
+                                         const json &llmCredential,
+                                         AiStoryboardResult &out,
+                                         std::string &error) {
+    json payload = {
+        {"text", text},
+        {"image_count", imageCount},
+        {"style", style}
+    };
+    if (llmCredential.is_object() && !llmCredential.empty()) {
+        payload["llm_credential"] = llmCredential;
+    }
+
+    auto client = drogon::HttpClient::newHttpClient(ConfigManager::aiServiceUrl);
+    auto req = drogon::HttpRequest::newHttpRequest();
+    req->setMethod(drogon::Post);
+    req->setPath("/api/v1/analysis/storyboard");
+    req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+    req->setBody(payload.dump());
+    if (!ConfigManager::aiServiceApiKey.empty()) {
+        req->addHeader("X-Internal-Api-Key", ConfigManager::aiServiceApiKey);
+    }
+
+    auto state = std::make_shared<SharedState>();
+    client->sendRequest(req, [state](drogon::ReqResult result,
+                                     const drogon::HttpResponsePtr &response) {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        state->result = result;
+        state->response = response;
+        state->done = true;
+        state->cv.notify_all();
+    });
+
+    {
+        std::unique_lock<std::mutex> lock(state->mutex);
+        constexpr int kStoryboardTimeoutSeconds = 60;
+        const bool finished = state->cv.wait_for(
+            lock, std::chrono::seconds(kStoryboardTimeoutSeconds),
+            [&state] { return state->done; });
+        if (!finished) {
+            error = "分镜生成超时（60s），请稍后重试";
+            return false;
+        }
+    }
+
+    if (state->result != drogon::ReqResult::Ok || state->response == nullptr) {
+        error = "AI 服务不可达（请确认 AI Service 已启动）";
+        spdlog::error("分镜调用失败: result={}", static_cast<int>(state->result));
+        return false;
+    }
+
+    json body;
+    try {
+        body = json::parse(state->response->getBody());
+    } catch (const std::exception &) {
+        error = "AI 服务响应解析失败";
+        return false;
+    }
+
+    if (state->response->statusCode() != drogon::k200OK) {
+        std::string message = body.value("message", std::string());
+        if (message.empty() && body.contains("detail") && body["detail"].is_string()) {
+            message = body["detail"].get<std::string>();
+        }
+        error = message.empty() ? "分镜生成失败" : message;
+        return false;
+    }
+
+    try {
+        out.title = body.value("title", std::string());
+        out.consistency = body.value("consistency", json::object());
+        out.consistencyPrompt = body.value("consistency_prompt", std::string());
+        out.negativePrompt = body.value("negative_prompt", std::string());
+        if (body.contains("parsed_data") && !body["parsed_data"].is_null()) {
+            out.parsedData = body["parsed_data"];
+        }
+        out.panels.clear();
+        const auto &panels = body.at("panels");
+        if (!panels.is_array()) {
+            error = "分镜响应缺少 panels";
+            return false;
+        }
+        for (const auto &item : panels) {
+            AiStoryboardPanel panel;
+            panel.index = item.value("index", static_cast<int>(out.panels.size()));
+            panel.text = item.value("text", std::string());
+            if (!panel.text.empty()) {
+                out.panels.push_back(panel);
+            }
+        }
+    } catch (const std::exception &) {
+        error = "分镜响应字段缺失";
+        return false;
+    }
+
+    if (out.panels.empty()) {
+        error = "分镜结果为空";
+        return false;
+    }
     return true;
 }

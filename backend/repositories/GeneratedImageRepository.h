@@ -18,6 +18,11 @@ public:
     static std::optional<GeneratedImage> findByIdAndUser(const std::string &id,
                                                          const std::string &userId);
 
+    /** 按 ID 集合 + 用户查询（批量入绘本的归属校验）；数据库异常返回 nullopt。 */
+    static std::optional<std::vector<GeneratedImage>> findByIdsAndUser(
+        const std::vector<std::string> &ids,
+        const std::string &userId);
+
     /** 按用户分页查询（bookId 为空表示不筛选）。
      *  返回 nullopt 表示「查询失败」，与「确实没有数据」的空列表区分开（服务层转 500）。 */
     static std::optional<std::vector<GeneratedImage>> findByUserId(const std::string &userId,

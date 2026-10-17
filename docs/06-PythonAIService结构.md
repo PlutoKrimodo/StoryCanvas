@@ -1117,6 +1117,13 @@ STORAGE_PATH=./storage
 - `utils/url_safety.py`：自定义 Base URL 仅允许 HTTPS、默认 443、完整域名；DNS 解析后拒绝非公网地址（SSRF）。
 - 凭据只存在于请求内存；日志与异常不得拼接请求头/请求体。
 
+**分镜扩展（2026-10-18）**：
+
+- 新增 `POST /api/v1/analysis/storyboard`：一次 LLM 调用返回 `title / parsed_data / consistency / consistency_prompt / panels[] / negative_prompt`。
+- `StoryboardService` 复用 `TextAnalyzerService` 的 JSON 容错与宽松映射；解析失败或面板数不符时按句子确定性切分，Mock 模式也能离线跑通。
+- `/images/generate` 新增 `parsed_data`、`consistency_prompt`、`negative_prompt_extra`：批次 N 个任务共享一次解析，避免重复 LLM 调用。
+- 分镜默认使用系统 LLM；BYOK 时由后端透传 `llm_credential`，与出图口径一致。
+
 ---
 
 **文档结束**

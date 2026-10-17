@@ -11,7 +11,7 @@
 #   ./scripts/start_all.sh --no-frontend   不起前端
 #   ./scripts/start_all.sh --rebuild       强制重新构建后端
 #   ./scripts/start_all.sh --init-db       用 psql 执行 sql/init.sql（本机 PostgreSQL 场景）
-#   ./scripts/start_all.sh --verify        启动后再跑一遍 verify_m1 / verify_m2
+#   ./scripts/start_all.sh --verify        启动后再跑 verify_m1 / verify_m2 / verify_chat
 #   ./scripts/start_all.sh --open          尝试自动打开浏览器
 #   ./scripts/start_all.sh --down          停止 compose 服务后退出
 #
@@ -60,7 +60,7 @@ usage() {
   --no-frontend     不启动前端
   --rebuild         强制重新构建后端
   --init-db         用 psql 执行 sql/init.sql（本机 PostgreSQL 场景）
-  --verify          启动后额外运行 verify_m1.sh 与 verify_m2.sh
+  --verify          启动后额外运行 verify_m1.sh、verify_m2.sh 与 verify_chat.sh
   --open            尝试自动打开浏览器
   --down            停止 docker compose 服务后退出
   -h, --help        显示本帮助
@@ -349,6 +349,7 @@ if [ "$VERIFY" -eq 1 ]; then
   if command -v jq >/dev/null 2>&1; then
     BASE="http://localhost:${BACKEND_PORT_V}/api/v1" bash "$ROOT_DIR/scripts/verify_m1.sh"
     BASE="http://localhost:${BACKEND_PORT_V}/api/v1" bash "$ROOT_DIR/scripts/verify_m2.sh"
+    BASE="http://localhost:${BACKEND_PORT_V}/api/v1" bash "$ROOT_DIR/scripts/verify_chat.sh"
   else
     warn "未安装 jq，跳过验收（sudo apt install jq）"
   fi

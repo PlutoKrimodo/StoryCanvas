@@ -15,7 +15,9 @@ const char *kSelectColumns =
     "SELECT t.id::text AS id, t.user_id::text AS user_id, t.book_id::text AS book_id, "
     "       t.page_id::text AS page_id, t.prompt, t.original_text, "
     "       t.parsed_data::text AS parsed_data, t.status, t.result_url, t.error_message, "
-    "       t.model_used, t.byok_llm, t.byok_image, t.parameters::text AS parameters, "
+    "       t.model_used, t.byok_llm, t.byok_image, "
+    "       t.batch_id::text AS batch_id, t.panel_index, t.panel_text, "
+    "       t.parameters::text AS parameters, "
     "       t.created_at::text AS created_at, t.updated_at::text AS updated_at, "
     "       t.completed_at::text AS completed_at, "
     "       g.id::text AS image_id, g.width AS image_width, g.height AS image_height "
@@ -36,9 +38,10 @@ bool GenerationTaskRepository::create(GenerationTask &task) {
         auto result = db->execSqlSync(
             "INSERT INTO generation_tasks "
             "(user_id, book_id, page_id, original_text, prompt, status, parameters, "
-            " byok_llm, byok_image) "
+            " byok_llm, byok_image, batch_id, panel_index, panel_text) "
             "VALUES ($1, NULLIF($2, '')::uuid, NULLIF($3, '')::uuid, NULLIF($4, ''), $5, "
-            "        'pending', $6::jsonb, $7, $8) "
+            "        'pending', $6::jsonb, $7, $8, NULLIF($9, '')::uuid, "
+            "        NULLIF($10, -1), NULLIF($11, '')) "
             "RETURNING id::text, created_at::text, updated_at::text",
             task.userId,
             task.bookId.value_or(""),
@@ -47,7 +50,10 @@ bool GenerationTaskRepository::create(GenerationTask &task) {
             task.prompt,
             parametersDump,
             task.byokLlm,
-            task.byokImage);
+            task.byokImage,
+            task.batchId.value_or(""),
+            task.panelIndex.has_value() ? *task.panelIndex : -1,
+            task.panelText.value_or(""));
 
         if (!result.empty()) {
             task.id = std::string(result[0]["id"].as<std::string_view>());
@@ -112,6 +118,42 @@ bool GenerationTaskRepository::markStatus(const std::string &id, const std::stri
         return result.affectedRows() > 0;
     } catch (const std::exception &e) {
         spdlog::error("更新任务状态失败: {}", e.what());
+        return false;
+    }
+}
+
+std::optional<std::vector<GenerationTask>> GenerationTaskRepository::findByBatchId(
+    const std::string &batchId) {
+    std::vector<GenerationTask> tasks;
+    try {
+        auto db = drogon::app().getDbClient();
+        auto result = db->execSqlSync(
+            std::string(kSelectColumns) +
+                " WHERE t.batch_id = $1 ORDER BY t.panel_index ASC, t.created_at ASC",
+            batchId);
+        for (size_t i = 0; i < result.size(); ++i) {
+            tasks.push_back(GenerationTask::fromRow(result[i]));
+        }
+        return tasks;
+    } catch (const std::exception &e) {
+        spdlog::error("按批次查询生成任务失败: {}", e.what());
+        return std::nullopt;
+    }
+}
+
+bool GenerationTaskRepository::resetForRetry(const std::string &taskId,
+                                             const std::string &panelText) {
+    try {
+        auto db = drogon::app().getDbClient();
+        auto result = db->execSqlSync(
+            "UPDATE generation_tasks SET status = 'pending', prompt = '', "
+            "result_url = NULL, error_message = NULL, model_used = NULL, "
+            "completed_at = NULL, panel_text = NULLIF($2, ''), "
+            "updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+            taskId, panelText);
+        return result.affectedRows() > 0;
+    } catch (const std::exception &e) {
+        spdlog::error("重置生成任务失败: {}", e.what());
         return false;
     }
 }

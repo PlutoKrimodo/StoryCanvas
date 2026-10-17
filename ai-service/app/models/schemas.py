@@ -125,6 +125,44 @@ class CredentialTestResponse(BaseModel):
     message: str = ""
 
 
+class StoryboardCharacter(BaseModel):
+    """分镜一致性设定中的角色外观。"""
+
+    name: str = Field(..., min_length=1, max_length=50)
+    appearance: str = Field("", max_length=300)
+
+
+class StoryboardConsistency(BaseModel):
+    """整组图片共享的角色 / 配色 / 画风约束。"""
+
+    characters: List[StoryboardCharacter] = Field(default_factory=list)
+    palette: str = Field("", max_length=120)
+    notes: str = Field("", max_length=300)
+
+
+class StoryboardPanel(BaseModel):
+    """一格的画面描述（从 0 开始编号）。"""
+
+    index: int = Field(..., ge=0, le=20)
+    text: str = Field(..., min_length=1, max_length=500)
+
+
+class StoryboardRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
+    image_count: int = Field(1, ge=1, le=6)
+    style: ArtStyle = ArtStyle.CARTOON
+    llm_credential: Optional[LLMCredential] = None
+
+
+class StoryboardResponse(BaseModel):
+    title: str = Field("", max_length=120)
+    parsed_data: ParsedData
+    consistency: StoryboardConsistency
+    consistency_prompt: str = Field("", max_length=1000)
+    panels: List[StoryboardPanel]
+    negative_prompt: str = Field("", max_length=500)
+
+
 class ImageGenerateRequest(BaseModel):
     """图像生成请求（Phase 5，无状态一站式）
 
@@ -141,6 +179,10 @@ class ImageGenerateRequest(BaseModel):
     book_id: Optional[str] = Field(None, description="绘本 ID（用于存储分层）")
     task_id: Optional[str] = Field(None, description="后端任务 ID（仅透传记录，不参与状态管理）")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="生成参数（宽高等）")
+    # 批次编排：由 storyboard 阶段生成一次，N 个任务共享
+    parsed_data: Optional[ParsedData] = Field(None, description="已解析的故事结构（避免重复 LLM）")
+    consistency_prompt: Optional[str] = Field(None, max_length=1000)
+    negative_prompt_extra: Optional[str] = Field(None, max_length=500)
     llm_credential: Optional[LLMCredential] = Field(
         None, description="用户自带 LLM 凭据（可选）"
     )

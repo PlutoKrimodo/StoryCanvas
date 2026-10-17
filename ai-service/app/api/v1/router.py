@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from . import analysis, credentials, health, images
+from . import analysis, credentials, health, images, storyboard
 
 api_router = APIRouter()
 
@@ -30,4 +30,11 @@ api_router.include_router(
     credentials.router,
     prefix="/credentials",
     tags=["Credentials"],
+)
+
+# 分镜规划（对话式多图生成）
+api_router.include_router(
+    storyboard.router,
+    prefix="/analysis",
+    tags=["Storyboard"],
 )

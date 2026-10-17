@@ -96,6 +96,55 @@ CREATE TABLE characters (
 );
 CREATE INDEX idx_characters_user_id ON characters(user_id);
 
+-- ==================== 对话与会话（Storyboard Chat）====================
+CREATE TABLE conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(120),
+    style VARCHAR(32),
+    size VARCHAR(20),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_conversations_user ON conversations(user_id, updated_at DESC);
+
+CREATE TABLE conversation_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    role VARCHAR(16) NOT NULL CHECK (role IN ('user', 'assistant')),
+    message_type VARCHAR(24) NOT NULL CHECK (message_type IN ('text', 'storyboard', 'images')),
+    content TEXT,
+    payload JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_conversation_messages_conversation
+    ON conversation_messages(conversation_id, created_at);
+
+-- 一次「分镜确认 → N 张图」的父记录；任务仍是一任务一图
+CREATE TABLE generation_batches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+    message_id UUID REFERENCES conversation_messages(id) ON DELETE SET NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft'
+        CHECK (status IN ('draft', 'pending', 'processing', 'completed', 'partial', 'failed', 'cancelled')),
+    style VARCHAR(32) NOT NULL,
+    size VARCHAR(20),
+    seed INTEGER,
+    panel_count INTEGER NOT NULL,
+    panels JSONB NOT NULL DEFAULT '[]',
+    consistency_prompt TEXT,
+    negative_prompt TEXT,
+    parsed_data JSONB,
+    -- BYOK 快照：批次创建时固化，N 个任务继承
+    byok_llm BOOLEAN NOT NULL DEFAULT false,
+    byok_image BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_generation_batches_user ON generation_batches(user_id, created_at DESC);
+CREATE INDEX idx_generation_batches_status ON generation_batches(status);
+
 -- ==================== 生成任务表 ====================
 CREATE TABLE generation_tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -113,6 +162,10 @@ CREATE TABLE generation_tasks (
     -- BYOK 任务快照：创建时记录是否使用用户自带 Key，处理阶段据此决定是否可回退
     byok_llm BOOLEAN NOT NULL DEFAULT false,
     byok_image BOOLEAN NOT NULL DEFAULT false,
+    -- 批次编排：batch_id 为空表示旧版单张任务；panel_index 从 0 开始
+    batch_id UUID REFERENCES generation_batches(id) ON DELETE SET NULL,
+    panel_index INTEGER,
+    panel_text TEXT,
     parameters JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -121,6 +174,7 @@ CREATE TABLE generation_tasks (
 CREATE INDEX idx_generation_tasks_user_id ON generation_tasks(user_id);
 CREATE INDEX idx_generation_tasks_book_id ON generation_tasks(book_id);
 CREATE INDEX idx_generation_tasks_status ON generation_tasks(status);
+CREATE INDEX idx_generation_tasks_batch ON generation_tasks(batch_id, panel_index);
 
 -- ==================== 生成图片表 ====================
 CREATE TABLE generated_images (

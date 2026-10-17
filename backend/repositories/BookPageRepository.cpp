@@ -14,6 +14,63 @@ const char *kSelectColumns =
 
 }  // namespace
 
+std::optional<std::vector<BookPage>> BookPageRepository::insertBatch(
+    const std::string &bookId, const std::vector<GeneratedImage> &images) {
+    try {
+        std::string values;
+        for (size_t i = 0; i < 6; ++i) {
+            if (i > 0) values += ",";
+            const std::string titleParam = "$" + std::to_string(2 + i * 2);
+            const std::string imageParam = "$" + std::to_string(3 + i * 2);
+            values += "(" + std::to_string(i) + ", " + titleParam +
+                      "::text, NULLIF(" + imageParam + ", '')::uuid)";
+        }
+
+        const std::string sql =
+            "WITH base AS (SELECT COALESCE(MAX(page_number), 0) AS max_page "
+            "              FROM book_pages WHERE book_id = $1), "
+            "batch_input(idx, title, image_id) AS ("
+            "  SELECT * FROM (VALUES " + values + ") AS v(idx, title, image_id) "
+            "  WHERE image_id IS NOT NULL"
+            "), inserted AS ("
+            "  INSERT INTO book_pages (book_id, page_number, title, image_id) "
+            "  SELECT $1, base.max_page + batch_input.idx + 1, "
+            "         NULLIF(batch_input.title, ''), batch_input.image_id "
+            "  FROM base, batch_input "
+            "  RETURNING id, book_id, page_number, title, thumbnail, image_id, "
+            "            created_at, updated_at"
+            ") "
+            "SELECT i.id::text AS id, i.book_id::text AS book_id, i.page_number, i.title, "
+            "       i.thumbnail, i.image_id::text AS image_id, g.file_path AS image_file_path, "
+            "       i.created_at::text AS created_at, i.updated_at::text AS updated_at "
+            "FROM inserted i LEFT JOIN generated_images g ON g.id = i.image_id "
+            "ORDER BY i.page_number";
+
+        std::vector<std::string> titles(6, "");
+        std::vector<std::string> ids(6, "");
+        for (size_t i = 0; i < images.size() && i < 6; ++i) {
+            ids[i] = images[i].id;
+        }
+
+        auto db = drogon::app().getDbClient();
+        auto result = db->execSqlSync(
+            sql,
+            bookId,
+            titles[0], ids[0], titles[1], ids[1], titles[2], ids[2],
+            titles[3], ids[3], titles[4], ids[4], titles[5], ids[5]);
+
+        std::vector<BookPage> pages;
+        pages.reserve(result.size());
+        for (size_t i = 0; i < result.size(); ++i) {
+            pages.push_back(BookPage::fromRow(result[i]));
+        }
+        return pages;
+    } catch (const std::exception &e) {
+        spdlog::error("批量保存绘本页失败: {}", e.what());
+        return std::nullopt;
+    }
+}
+
 bool BookPageRepository::upsert(BookPage &page) {
     try {
         auto db = drogon::app().getDbClient();

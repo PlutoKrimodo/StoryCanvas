@@ -1,34 +1,33 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Alert, App, Button, Card, Col, Row, Typography } from 'antd'
+import { Alert, App, Button, Space, Spin, Tag, Typography } from 'antd'
+import { BulbOutlined, HistoryOutlined, PlusOutlined } from '@ant-design/icons'
 
-import GenerationForm from '../../components/ai/GenerationForm'
-import GenerationHistory from '../../components/ai/GenerationHistory'
-import GenerationProgress from '../../components/ai/GenerationProgress'
-import ResultPreview from '../../components/ai/ResultPreview'
+import Composer from '../../components/chat/Composer'
+import ConversationDrawer from '../../components/chat/ConversationDrawer'
+import MessageList from '../../components/chat/MessageList'
+import SaveBatchModal from '../../components/chat/SaveBatchModal'
 import SaveToBookModal from '../../components/ai/SaveToBookModal'
 import AppLayout from '../../components/layout/AppLayout'
-import PageHeader from '../../components/layout/PageHeader'
-import { aiCredentialsApi } from '../../api/aiCredentials'
-import { useGeneration } from '../../hooks/useGeneration'
+import { useChatGeneration } from '../../hooks/useChatGeneration'
+import { imagesApi } from '../../api/images'
 import { useAuthStore } from '../../stores/authStore'
-import { useGenerationStore } from '../../stores/generationStore'
-import type { AiCredentialOverview } from '../../types/aiCredentials'
-import { ArtStyle, TaskStatus, type GenerationRequest, type TaskResult } from '../../types/generation'
+import type { BatchItem, ChatMessage, StoryboardPanel } from '../../types/conversation'
+import { ArtStyle } from '../../types/generation'
 
-const { Paragraph, Text } = Typography
+const { Text, Paragraph } = Typography
 
-interface ReuseState {
-  key: number
-  text?: string
-  style?: ArtStyle
-}
+const PROMPTS = [
+  '小女孩在雨后的森林里发现一只受伤的小鸟，她把它捧在手心带回家。',
+  '小熊第一次独自坐火车去海边，路上遇到一只会唱歌的鲸鱼。',
+  '夜晚的屋顶上，小猫和月亮交换了一个秘密。',
+]
 
 /**
- * AI 生成页（核心页面）。
+ * 对话式创作页（替代原表单式 Generate）。
  *
- * 支持 `?bookId=xxx` 直接为某本绘本生成；不带参数时为通用生成，
- * 结果可事后通过「保存到绘本」落到任意绘本（T-1 解耦设计）。
+ * 流程：发送故事 → AI 分镜 → 逐格确认 → 批次出图 → 单图/整组入绘本。
+ * `/generate?bookId=xxx` 仍保留，图片可直接落入当前绘本。
  */
 function Generate() {
   const { message } = App.useApp()
@@ -37,234 +36,277 @@ function Generate() {
   const bookId = searchParams.get('bookId') ?? undefined
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
-  const { currentTask, polling, createTask, regenerate, cancel, reset } = useGeneration()
-  const fetchHistory = useGenerationStore((state) => state.fetchHistory)
+  const chat = useChatGeneration()
+  const [text, setText] = useState('')
+  const [style, setStyle] = useState<ArtStyle>(ArtStyle.CARTOON)
+  const [size, setSize] = useState('1024x1024')
+  const [count, setCount] = useState(1)
+  const [seed, setSeed] = useState<number | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [saveImageId, setSaveImageId] = useState<string | null>(null)
+  const [saveBatchOpen, setSaveBatchOpen] = useState(false)
+  const [batchImageIds, setBatchImageIds] = useState<string[]>([])
 
-  const [submitting, setSubmitting] = useState(false)
-  const [reuse, setReuse] = useState<ReuseState>({ key: 0 })
-  const [saveOpen, setSaveOpen] = useState(false)
-  const [savingImageId, setSavingImageId] = useState<string | null>(null)
-  const [byok, setByok] = useState<AiCredentialOverview | null>(null)
-
-  // 低干扰提示条：BYOK 状态只用于引导，失败时不影响生成流程
   useEffect(() => {
-    let cancelled = false
     if (!isAuthenticated) {
-      setByok(null)
-      return () => {
-        cancelled = true
-      }
-    }
-    aiCredentialsApi
-      .getOverview()
-      .then(({ data }) => {
-        if (!cancelled) setByok(data.data)
-      })
-      .catch((error) => {
-        console.error('读取 BYOK 状态失败', error)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [isAuthenticated])
-
-  const handleSubmit = async (payload: GenerationRequest) => {
-    setSubmitting(true)
-    try {
-      await createTask(payload)
-      message.success('生成任务已创建，正在为你绘制插画…')
-    } catch (error) {
-      console.error('创建生成任务失败', error)
-      message.error(error instanceof Error ? error.message : '创建生成任务失败')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleRegenerate = useCallback(() => {
-    if (!currentTask) {
+      chat.newConversation()
       return
     }
-    regenerate(currentTask.task_id)
-      .then(() => message.success('已提交重新生成'))
-      .catch((error) => {
-        console.error('重新生成失败', error)
-        message.error(error instanceof Error ? error.message : '重新生成失败')
-      })
-  }, [currentTask, regenerate])
-
-  const handleCancel = useCallback(() => {
-    if (!currentTask) {
-      return
-    }
-    cancel(currentTask.task_id).then((ok) => {
-      if (ok) {
-        message.info('已请求取消任务')
+    void chat.loadConversations().then((items) => {
+      if (!bookId && items.length > 0) {
+        void chat.loadConversation(items[0].id).then((conversation) => {
+          if (conversation?.style) setStyle(conversation.style as ArtStyle)
+          if (conversation?.size) setSize(conversation.size)
+        })
       }
     })
-  }, [currentTask, cancel])
+    // 只在登录态变化时初始化，避免每次渲染重置会话
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated])
 
-  const handleReuse = useCallback((task: TaskResult) => {
-    const style = task.parameters?.style
-    setReuse((prev) => ({
-      key: prev.key + 1,
-      text: task.original_text ?? undefined,
-      style: typeof style === 'string' ? (style as ArtStyle) : undefined,
-    }))
-    message.info('已回填历史参数，可修改后重新生成')
-  }, [])
+  const handleSend = () => {
+    const value = text.trim()
+    if (!value || chat.submitting) return
+    setText('')
+    void chat
+      .sendPlan({
+        text: value,
+        imageCount: isAuthenticated ? count : 1,
+        style,
+        size,
+        bookId,
+        seed,
+      })
+      .catch((error) => {
+        console.error('创建分镜失败', error)
+        message.error(error instanceof Error ? error.message : '创建分镜失败')
+        setText(value)
+      })
+  }
 
-  const completed = currentTask?.status === TaskStatus.COMPLETED && !!currentTask.result?.image_url
+  const handleStart = (chatMessage: ChatMessage, panels: StoryboardPanel[]) => {
+    const batchId = chatMessage.payload.batch_id
+    if (!batchId) return
+    void chat.startBatch(batchId, panels, bookId, seed, style, size).catch((error) => {
+      console.error('启动生成失败', error)
+      message.error(error instanceof Error ? error.message : '启动生成失败')
+    })
+  }
+
+  const handleResplit = (value: string) => {
+    void chat
+      .sendPlan({
+        text: value,
+        imageCount: isAuthenticated ? count : 1,
+        style,
+        size,
+        bookId,
+        seed,
+      })
+      .catch((error) => {
+        console.error('重新拆分失败', error)
+        message.error('重新拆分失败，请稍后重试')
+      })
+  }
+
+  const handleDownload = (imageId: string) => {
+    void imagesApi.download(imageId).catch((error) => {
+      console.error('下载图片失败', error)
+      message.error('下载图片失败')
+    })
+  }
+
+  const handleSaveAll = (items: BatchItem[]) => {
+    if (!isAuthenticated) {
+      message.info('登录后即可把图片保存到绘本')
+      navigate('/login')
+      return
+    }
+    const imageIds = items
+      .filter((item) => item.status === 'completed' && item.image_id)
+      .map((item) => item.image_id as string)
+    if (imageIds.length === 0) {
+      message.info('还没有可加入绘本的图片')
+      return
+    }
+    setBatchImageIds(imageIds)
+    setSaveBatchOpen(true)
+  }
+
+  const empty = chat.messages.length === 0
 
   return (
     <AppLayout variant="app">
-      <PageHeader
-        title="AI 绘本插画生成"
-        description={
-          <>
-            输入一段故事文字，选择艺术风格，系统将解析文本、优化提示词并生成插画。
-            {bookId ? <Text strong> 本次结果将绑定到当前绘本。</Text> : null}
-          </>
-        }
-        extra={currentTask ? <Button onClick={reset}>重新开始</Button> : undefined}
-      />
+      <div className="mx-auto flex h-[calc(100vh-10rem)] w-full max-w-4xl flex-col">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h1 className="font-display text-xl font-semibold text-ink">创作对话</h1>
+            <Paragraph type="secondary" className="!mb-0 mt-1 text-xs">
+              先拆分镜，确认后再出图；一组图共享角色设定、风格与随机种子。
+              {bookId ? ' 当前作品将保存到正在编辑的绘本。' : ''}
+            </Paragraph>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {!isAuthenticated ? (
+              <Tag color="gold">游客 · 单次 1 张</Tag>
+            ) : (
+              <Tag color="success">最多 6 张 · 会话自动保存</Tag>
+            )}
+            <Button
+              size="small"
+              icon={<HistoryOutlined />}
+              onClick={() => {
+                setHistoryOpen(true)
+                if (isAuthenticated) void chat.loadConversations()
+              }}
+            >
+              历史
+            </Button>
+            <Button size="small" icon={<PlusOutlined />} onClick={chat.newConversation}>
+              新对话
+            </Button>
+          </div>
+        </div>
 
-      <div className="mb-5">
         {!isAuthenticated ? (
           <Alert
+            className="mb-3"
             type="info"
             showIcon
             message={
               <span>
-                登录后可配置自己的 API Key，生成不占全站额度。
-                <Link to="/login">去登录</Link>
+                游客可免费生成 1 张；<Link to="/login">登录后</Link>
+                可一次生成最多 6 张，并保存创作会话。
               </span>
             }
           />
-        ) : byok?.byok_enabled ? (
-          byok.quota_exempt ? (
-            <Alert
-              type="success"
-              showIcon
-              message={
-                <span>
-                  本次将使用你的 API Key（文本理解 + 图像生成），不占全站每日额度。
-                  <Link to="/profile#ai-credentials">管理 Key</Link>
-                </span>
-              }
-            />
-          ) : byok.credentials.llm || byok.credentials.image ? (
-            <Alert
-              type="info"
-              showIcon
-              message={
-                <span>
-                  已启用部分 BYOK：
-                  {byok.credentials.llm ? '文本理解' : ''}
-                  {byok.credentials.llm && byok.credentials.image ? '、' : ''}
-                  {byok.credentials.image ? '图像生成' : ''}
-                  使用你的 Key，其余仍用系统 Key；
-                  {byok.quota_exempt ? '不占全站额度。' : '仍会计入每日限额。'}
-                  <Link to="/profile#ai-credentials">继续配置</Link>
-                </span>
-              }
-            />
-          ) : (
-            <Alert
-              type="info"
-              showIcon
-              message={
-                <span>
-                  用自己的 API Key 生成，可免每日限额。
-                  <Link to="/profile#ai-credentials">去配置</Link>
-                </span>
-              }
-            />
-          )
         ) : null}
+
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          {empty ? (
+            <div className="flex h-full flex-col items-center justify-center gap-4 py-10 text-center">
+              <div className="rounded-full bg-canvas2 p-4 text-clay">
+                <BulbOutlined className="text-2xl" />
+              </div>
+              <div>
+                <Text strong className="text-base">
+                  把一个故事，聊成一本连环画
+                </Text>
+                <Paragraph type="secondary" className="!mb-0 mt-1 text-sm">
+                  告诉我故事，我会先拆成画面，确认后再一张张画出来。
+                </Paragraph>
+              </div>
+              {chat.submitting ? (
+                <Space className="text-sm text-ink2">
+                  <Spin size="small" />
+                  正在理解故事并拆分镜…
+                </Space>
+              ) : null}
+              <div className="flex w-full max-w-xl flex-col gap-2">
+                {PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => setText(prompt)}
+                    className="rounded-chip border border-hairline bg-paper px-4 py-3 text-left text-sm text-ink2 transition-colors hover:border-clay/40 hover:text-ink"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <MessageList
+              messages={chat.messages}
+              batch={chat.batch}
+              polling={chat.polling}
+              sending={chat.submitting}
+              onStart={handleStart}
+              onResplit={handleResplit}
+              onDownload={handleDownload}
+              onSave={(imageId) => {
+                if (!isAuthenticated) {
+                  message.info('登录后即可把图片保存到绘本')
+                  navigate('/login')
+                  return
+                }
+                setSaveImageId(imageId)
+              }}
+              onSaveAll={handleSaveAll}
+              onRegenerate={(index, batchId) => {
+                void chat.regeneratePanel(index, batchId).catch((error) => {
+                  console.error('单格重画失败', error)
+                  message.error('重画失败，请稍后重试')
+                })
+              }}
+              onCancel={(batchId) => {
+                void chat.cancelBatch(batchId).catch((error) => {
+                  console.error('取消批次失败', error)
+                  message.error('取消失败，请稍后重试')
+                })
+              }}
+            />
+          )}
+        </div>
+
+        <div className="sticky bottom-0 z-10 bg-canvas pt-3">
+          <Composer
+            value={text}
+            onValueChange={setText}
+            style={style}
+            onStyleChange={setStyle}
+            size={size}
+            onSizeChange={setSize}
+            count={count}
+            onCountChange={setCount}
+            seed={seed}
+            onSeedChange={setSeed}
+            isGuest={!isAuthenticated}
+            sending={chat.submitting}
+            onSend={handleSend}
+            onHistory={() => {
+              setHistoryOpen(true)
+              if (isAuthenticated) void chat.loadConversations()
+            }}
+            onNew={chat.newConversation}
+          />
+        </div>
       </div>
 
-      <Row gutter={[24, 24]}>
-        <Col xs={24} lg={14}>
-          {/* GenerationForm 不再自带 Card，外壳由此处提供（docs/17 §4.1 容器嵌套修正） */}
-          <Card className="shadow-card">
-            <GenerationForm
-              key={reuse.key}
-              bookId={bookId}
-              initialText={reuse.text}
-              initialStyle={reuse.style}
-              loading={submitting}
-              onSubmit={handleSubmit}
-            />
-          </Card>
-
-          <div className="mt-6">
-            <GenerationProgress
-              task={currentTask}
-              polling={polling}
-              onCancel={handleCancel}
-              onRegenerate={completed || currentTask?.status === TaskStatus.FAILED ? handleRegenerate : undefined}
-            />
-            {currentTask?.status === TaskStatus.FAILED &&
-            (currentTask.byok_llm || currentTask.byok_image) ? (
-              <Alert
-                className="mt-3"
-                type="info"
-                showIcon
-                message={
-                  <span>
-                    本次使用了你配置的 API Key。若提示 Key 无效或额度不足，请到
-                    <Link to="/profile#ai-credentials">个人中心</Link>
-                    更新后重试。
-                  </span>
-                }
-              />
-            ) : null}
-          </div>
-
-          {completed && currentTask ? (
-            <div className="mt-6">
-              <ResultPreview
-                task={currentTask}
-                onRegenerate={handleRegenerate}
-                onSaveToBook={(imageId) => {
-                  // Q3②：游客不能写绘本（后端 MemberFilter 也会 403）；
-                  // 直接引导登录，避免进入「你还没有绘本」的死路弹窗
-                  if (!isAuthenticated) {
-                    message.info('登录后即可保存到绘本')
-                    navigate('/login')
-                    return
-                  }
-                  setSavingImageId(imageId)
-                  setSaveOpen(true)
-                }}
-              />
-            </div>
-          ) : null}
-
-          {!currentTask ? (
-            <Card className="!mt-6 border-dashed">
-              <Paragraph type="secondary" className="!mb-0">
-                生成结果会显示在这里。你可以先自由生成，再决定保存到哪本绘本。
-              </Paragraph>
-            </Card>
-          ) : null}
-        </Col>
-
-        <Col xs={24} lg={10}>
-          <GenerationHistory bookId={bookId} onReuse={handleReuse} />
-        </Col>
-      </Row>
+      <ConversationDrawer
+        open={historyOpen}
+        loading={chat.historyLoading}
+        conversations={chat.conversations}
+        currentId={chat.conversationId}
+        onClose={() => setHistoryOpen(false)}
+        onSelect={(id) => {
+          setHistoryOpen(false)
+          void chat.loadConversation(id).then((conversation) => {
+            if (conversation?.style) setStyle(conversation.style as ArtStyle)
+            if (conversation?.size) setSize(conversation.size)
+          })
+        }}
+        onNew={() => {
+          setHistoryOpen(false)
+          chat.newConversation()
+        }}
+        onDelete={(id) => {
+          void chat.removeConversation(id).catch(() => message.error('删除会话失败'))
+        }}
+      />
 
       <SaveToBookModal
-        open={saveOpen}
-        imageId={savingImageId}
+        open={!!saveImageId}
+        imageId={saveImageId}
         defaultBookId={bookId}
-        onCancel={() => setSaveOpen(false)}
-        onSaved={() => {
-          // 保存成功后刷新历史，便于确认本次结果已入库
-          void fetchHistory({ book_id: bookId })
-        }}
+        onCancel={() => setSaveImageId(null)}
+      />
+
+      <SaveBatchModal
+        open={saveBatchOpen}
+        imageIds={batchImageIds}
+        defaultBookId={bookId}
+        onCancel={() => setSaveBatchOpen(false)}
       />
     </AppLayout>
   )

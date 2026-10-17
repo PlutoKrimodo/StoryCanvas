@@ -177,6 +177,9 @@ void UserRepository::transferGuestResources(const std::string &guestId, const st
                         userId, guestId);
         db->execSqlSync("UPDATE books SET user_id = $1 WHERE user_id = $2", userId, guestId);
         db->execSqlSync("UPDATE characters SET user_id = $1 WHERE user_id = $2", userId, guestId);
+        // 对话式生成：游客批次可能仍在队列中，随任务一起认领（会话本身不落库）
+        db->execSqlSync("UPDATE generation_batches SET user_id = $1 WHERE user_id = $2",
+                        userId, guestId);
         spdlog::info("已转移游客资源（图片文件仍位于原相对路径，无需搬动）");
     } catch (const std::exception &e) {
         spdlog::error("转移游客资源失败: {}", e.what());

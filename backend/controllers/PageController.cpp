@@ -66,6 +66,34 @@ void PageController::savePage(
     }
 }
 
+void PageController::saveBatchPages(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    std::string bookId) {
+
+    auto userId = req->getAttributes()->get<std::string>("user_id");
+
+    auto body = parseBody(req);
+    if (body.is_null()) {
+        callback(ApiResponse::fail(400, "请求体必须是 JSON"));
+        return;
+    }
+
+    auto batchReq = SaveBatchPagesRequest::fromJson(body);
+    if (!batchReq.validate()) {
+        callback(sendJson(422, ApiResponse::validationError(
+                                   "字段校验失败", validationErrors(batchReq.getErrors()))));
+        return;
+    }
+
+    auto result = PageService::saveBatchPages(userId, bookId, batchReq);
+    if (result.success) {
+        callback(sendJson(result.code, ApiResponse::success(result.message, result.data)));
+    } else {
+        callback(sendJson(result.code, ApiResponse::error(result.code, result.message)));
+    }
+}
+
 void PageController::listPages(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback,

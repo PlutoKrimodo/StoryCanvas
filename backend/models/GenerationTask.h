@@ -28,6 +28,12 @@ struct GenerationTask {
     // BYOK 快照：创建任务时是否使用用户自带 Key（处理阶段据此决定不回退）
     bool byokLlm = false;
     bool byokImage = false;
+
+    // 批次编排：batchId 为空表示旧版单张任务
+    std::optional<std::string> batchId;
+    std::optional<int> panelIndex;
+    std::optional<std::string> panelText;
+
     json parameters = json::object();
     std::optional<std::string> createdAt;
     std::optional<std::string> updatedAt;

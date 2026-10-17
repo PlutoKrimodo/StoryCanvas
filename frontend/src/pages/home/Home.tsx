@@ -8,7 +8,6 @@ import { Button, Typography } from 'antd'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import GuestGenerator from '../../components/ai/GuestGenerator'
 import AppLayout from '../../components/layout/AppLayout'
 import PageHeader from '../../components/layout/PageHeader'
 import Wordmark from '../../components/layout/Wordmark'
@@ -39,10 +38,18 @@ function Home() {
       <AppLayout variant="hero">
         <div className="animate-enter flex flex-col items-center">
           <Wordmark size="hero" tagline="把一段故事，画成一幅绘本插画" />
-          <div className="mt-10 w-full">
-            <GuestGenerator />
+          <div className="mt-10 flex w-full flex-col items-center">
+            <Button
+              type="primary"
+              size="large"
+              shape="round"
+              icon={<ThunderboltOutlined />}
+              onClick={() => navigate('/generate')}
+            >
+              开始创作
+            </Button>
             <Text className="mt-4 block text-center text-sm text-ink3">
-              免费 {quota} 张 · 无需注册 · 登录后可保存到绘本并导出 PDF
+              免费 {quota} 张 · 无需注册 · 登录后可一次生成多张、保存到绘本并导出 PDF
             </Text>
           </div>
         </div>

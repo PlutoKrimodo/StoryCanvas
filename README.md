@@ -16,6 +16,7 @@ StoryCanvas 是一个基于生成式 AI 的儿童绘本智能创作与图像生�
 - **绘本管理**: 创建、查看、更新、删除绘本项目（分页 + 状态筛选 + 归属隔离）
 - **AI 图像生成**: 文本解析（角色/场景/物品/动作/风格）、Prompt 优化、图像生成
 - **用户自带 API Key（BYOK）**: 登录用户可接入自己的 LLM / 图像 Key，选厂商、粘贴 Key、保存验证三步完成；AES-256-GCM 加密入库、脱敏回显，双项配置时免全站每日限额
+- **对话式多图创作**: `/generate` 改为聊天界面，AI 先拆分镜、用户逐格确认后一次生成最多 6 张；同批次共享角色设定、风格与 seed，支持单格重画与整组入绘本
 - **任务管理**: 后端内存队列 + 工作线程异步生成，任务状态落库与轮询查询
 - **结果预览**: 生成结果展示、放大、单张下载与重新生成
 - **保存到绘本**: 把生成图按页绑定到绘本（`book_pages.image_id`）
@@ -145,8 +146,20 @@ npm run dev                              # http://localhost:5173
 - **双项都配置**时，该用户的任务不占全站 `GLOBAL_DAILY_GENERATION_CAP`；只配一项仍照常计入；
 - 已配置的能力调用失败时任务直接失败并提示更新 Key，**不会静默回退系统 Key**；
 - 需要在 `.env` 配置 `ENCRYPTION_KEY`（`./scripts/setup.sh` 首次创建 `.env` 时会自动生成）；
-- 存量数据库需执行：`psql -h localhost -U storycanvas -d storycanvas -f sql/migrate_byok.sql`；
+- 存量数据库需依次执行：`sql/migrate_byok.sql`、`sql/migrate_conversation.sql`；
 - 故障回滚：设置 `BYOK_ENABLED=false` 并重启后端，所有请求回到系统 Key。
+
+### 对话式多图创作
+
+`/generate` 是对话式创作页：
+
+1. 输入连续故事，选择风格、尺寸与张数（1/2/4/6；游客仅 1 张）；
+2. AI 先返回 N 格分镜，用户可逐格编辑；确认前不会产生图像费用；
+3. 确认后一次生成 N 张，同批次共享角色设定、风格、负向提示与 seed；
+4. 每张图可单独下载 / 加入绘本 / 重画，整组可按顺序写入绘本连续页；
+5. 登录用户的会话与分镜持久化，可在右上角「历史」抽屉回看续画；游客仅保留当前页面内存。
+
+存量数据库需执行 `sql/migrate_conversation.sql`。旧 `POST /generation` 单张接口仍保留，历史任务不受影响。
 
 ### Docker 部署
 
@@ -228,6 +241,7 @@ StoryCanvas/
 - AI 文本解析与 Prompt 优化
 - AI 图像生成（真实厂商 + Mock 降级）
 - 用户自带 API Key（BYOK，LLM + 图像）
+- 对话式多图创作（分镜确认 + 批次生成）
 - 生成结果预览
 - 重新生成 / 取消任务
 - 保存到绘本（页容器绑定 `image_id`）
@@ -273,6 +287,7 @@ npx tsc --noEmit && npm test
 ./scripts/verify_m4.sh    # Phase 5 图像生成闭环
 ./scripts/verify_guest.sh # T-1 游客生成 + 认领（能力层）
 ./scripts/verify_byok.sh  # BYOK 凭据（需迁移 + ENCRYPTION_KEY）
+./scripts/verify_chat.sh  # 对话式多图：分镜 → 生成 → 会话 → 整组入绘本
 ```
 ---
 ## 贡献

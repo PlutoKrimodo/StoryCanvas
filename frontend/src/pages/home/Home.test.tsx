@@ -25,15 +25,18 @@ describe('Home 双形态', () => {
     useAuthStore.setState({ isAuthenticated: false, user: null })
   })
 
-  it('游客：hero 居中 + 生成器可直接使用 + 额度小字', () => {
+  it('游客：hero 居中 + 开始创作入口 + 额度小字', () => {
     renderHome()
     expect(screen.getByRole('img', { name: 'StoryCanvas' })).toBeInTheDocument()
     expect(screen.getByText('把一段故事，画成一幅绘本插画')).toBeInTheDocument()
-    expect(screen.getByRole('textbox')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /立即生成/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /开始创作/ })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(screen.getByText(/无需注册/)).toBeInTheDocument()
     // hero 形态不出顶栏导航
     expect(screen.queryByRole('link', { name: 'AI 生成' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /开始创作/ }))
+    expect(screen.getByTestId('path')).toHaveTextContent('/generate')
   })
 
   it('已登录：4 条入口跳转（CTA + 三个 tile）全部可达', () => {

@@ -97,7 +97,10 @@ class GenerationService(BaseService):
         request: ImageGenerateRequest,
         parsed_data: Optional[ParsedData] = None,
     ) -> ImageGenerateResponse:
-        # 1. 文本解析（如调用方已提供结构化数据则跳过，避免重复消耗 LLM）
+        # 1. 文本解析：批次会把 storyboard 阶段的 parsed_data 透传进来，
+        #    此时 N 个任务只解析一次，禁止再次调用 LLM。
+        if parsed_data is None:
+            parsed_data = request.parsed_data
         if parsed_data is None:
             analysis = await self.analyzer.analyze(request.text)
             parsed_data = analysis.parsed_data
@@ -105,7 +108,19 @@ class GenerationService(BaseService):
         # 2. Prompt 优化
         style = request.style
         prompt = self.optimizer.optimize(parsed_data, style, request.parameters)
+        if request.parsed_data is not None and request.text.strip():
+            # 共享解析只描述整体故事；每格仍需注入自己的画面描述
+            prompt = f"{prompt}, scene: {request.text.strip()[:500]}"
+        if request.consistency_prompt:
+            prompt = f"{request.consistency_prompt}\n{prompt}"
+
         negative = self.optimizer.negative(style)
+        if request.negative_prompt_extra:
+            negative = (
+                f"{negative}, {request.negative_prompt_extra}"
+                if negative
+                else request.negative_prompt_extra
+            )
 
         # 3. 图像生成
         width, height = self._resolve_size(request.parameters)

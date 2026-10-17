@@ -64,6 +64,33 @@ std::optional<GeneratedImage> GeneratedImageRepository::findById(const std::stri
     }
 }
 
+std::optional<std::vector<GeneratedImage>> GeneratedImageRepository::findByIdsAndUser(
+    const std::vector<std::string> &ids, const std::string &userId) {
+    try {
+        auto db = drogon::app().getDbClient();
+        std::vector<std::string> slots(6, "");
+        for (size_t i = 0; i < ids.size() && i < slots.size(); ++i) {
+            slots[i] = ids[i];
+        }
+        auto result = db->execSqlSync(
+            std::string(kSelectColumns) +
+                " WHERE i.user_id = $1 AND i.id IN ("
+                "NULLIF($2, '')::uuid, NULLIF($3, '')::uuid, NULLIF($4, '')::uuid, "
+                "NULLIF($5, '')::uuid, NULLIF($6, '')::uuid, NULLIF($7, '')::uuid)",
+            userId, slots[0], slots[1], slots[2], slots[3], slots[4], slots[5]);
+
+        std::vector<GeneratedImage> images;
+        images.reserve(result.size());
+        for (size_t i = 0; i < result.size(); ++i) {
+            images.push_back(GeneratedImage::fromRow(result[i]));
+        }
+        return images;
+    } catch (const std::exception &e) {
+        spdlog::error("批量查询生成图失败: {}", e.what());
+        return std::nullopt;
+    }
+}
+
 std::optional<GeneratedImage> GeneratedImageRepository::findByIdAndUser(
     const std::string &id, const std::string &userId) {
     try {

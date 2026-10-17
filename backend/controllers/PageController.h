@@ -17,6 +17,8 @@ class PageController : public drogon::HttpController<PageController> {
 public:
     METHOD_LIST_BEGIN
     ADD_METHOD_TO(PageController::savePage, "/api/v1/books/{1}/pages", Post, "JwtFilter", "MemberFilter");
+    ADD_METHOD_TO(PageController::saveBatchPages, "/api/v1/books/{1}/pages/batch", Post,
+                  "JwtFilter", "MemberFilter");
     ADD_METHOD_TO(PageController::listPages, "/api/v1/books/{1}/pages", Get, "JwtFilter");
     METHOD_LIST_END
 
@@ -26,6 +28,9 @@ public:
     void savePage(const HttpRequestPtr &req,
                   std::function<void(const HttpResponsePtr &)> &&callback,
                   std::string bookId);
+    void saveBatchPages(const HttpRequestPtr &req,
+                        std::function<void(const HttpResponsePtr &)> &&callback,
+                        std::string bookId);
     void listPages(const HttpRequestPtr &req,
                    std::function<void(const HttpResponsePtr &)> &&callback,
                    std::string bookId);

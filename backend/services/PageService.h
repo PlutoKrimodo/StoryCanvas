@@ -12,6 +12,11 @@ public:
                                   const std::string &bookId,
                                   const SavePageRequest &req);
 
+    /** 整组图片按顺序写入连续页；全部成功或全部不写。 */
+    static ServiceResult saveBatchPages(const std::string &userId,
+                                        const std::string &bookId,
+                                        const SaveBatchPagesRequest &req);
+
     /** 按页码升序返回绘本的所有页（供前端合成 PDF）。 */
     static ServiceResult listPages(const std::string &userId, const std::string &bookId);
 };

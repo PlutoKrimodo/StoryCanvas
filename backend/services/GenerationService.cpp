@@ -10,6 +10,7 @@
 #include "../repositories/BookRepository.h"
 #include "../repositories/GeneratedImageRepository.h"
 #include "../repositories/GenerationTaskRepository.h"
+#include "../repositories/GenerationBatchRepository.h"
 #include "../utils/AiCredentialRules.h"
 #include "../utils/ConfigManager.h"
 #include "AiServiceClient.h"
@@ -56,7 +57,10 @@ ServiceResult conflict(const std::string &message) {
  * 游客配额校验：统计该游客「进行中 + 已完成」的任务数，达到上限即拒绝（429）。
  * 非游客不限制。
  */
-bool checkGuestQuota(const std::string &userId, bool isGuest, ServiceResult &result) {
+bool checkGuestQuota(const std::string &userId,
+                     bool isGuest,
+                     int imageCount,
+                     ServiceResult &result) {
     if (!isGuest) {
         return true;
     }
@@ -64,7 +68,7 @@ bool checkGuestQuota(const std::string &userId, bool isGuest, ServiceResult &res
         GenerationTaskRepository::countByUserAndStatus(userId, "pending") +
         GenerationTaskRepository::countByUserAndStatus(userId, "processing") +
         GenerationTaskRepository::countByUserAndStatus(userId, "completed");
-    if (used >= ConfigManager::guestGenerationQuota) {
+    if (used + imageCount > ConfigManager::guestGenerationQuota) {
         result.code = 429;
         result.message = "游客免费额度已用完（共 " +
                          std::to_string(ConfigManager::guestGenerationQuota) +
@@ -78,8 +82,9 @@ bool checkGuestQuota(const std::string &userId, bool isGuest, ServiceResult &res
  * 全站每日额度校验：今天所有用户创建的任务总数达到上限即拒绝（429）。
  * 游客身份可无限重取，个人额度封顶不住共用系统 Key 的花费，故需全站上限。
  */
-bool checkGlobalDailyQuota(ServiceResult &result) {
-    if (GenerationTaskRepository::countCreatedToday() < ConfigManager::globalDailyGenerationCap) {
+bool checkGlobalDailyQuota(int imageCount, ServiceResult &result) {
+    if (GenerationTaskRepository::countCreatedToday() + imageCount <=
+        ConfigManager::globalDailyGenerationCap) {
         return true;
     }
     result.code = 429;
@@ -220,14 +225,43 @@ void GenerationService::processTask(const std::string &taskId) {
     }
 
     GenerationTaskRepository::markStatus(taskId, "processing");
+    if (task.batchId.has_value()) {
+        GenerationBatchRepository::refreshStatus(*task.batchId);
+    }
     spdlog::info("开始处理生成任务: {}", taskId);
 
     AiImageResult aiResult;
     std::string error;
     const std::string bookId = task.bookId.value_or("");
-    const std::string style = task.parameters.is_object()
-                                  ? task.parameters.value("style", std::string("cartoon"))
-                                  : std::string("cartoon");
+    std::string style = task.parameters.is_object()
+                            ? task.parameters.value("style", std::string("cartoon"))
+                            : std::string("cartoon");
+
+    // 批次上下文：N 个任务共享 parsed_data / consistency / negative / seed
+    json parsedData = json(nullptr);
+    std::string consistencyPrompt;
+    std::string negativePromptExtra;
+    if (task.batchId.has_value()) {
+        auto batch = GenerationBatchRepository::findById(*task.batchId);
+        if (!batch.has_value()) {
+            task.status = "failed";
+            task.errorMessage = "所属生成批次不存在，请重新开始创作";
+            GenerationTaskRepository::updateResult(task);
+            return;
+        }
+        style = batch->style;
+        if (batch->parsedData.has_value()) {
+            parsedData = *batch->parsedData;
+        }
+        consistencyPrompt = batch->consistencyPrompt.value_or("");
+        negativePromptExtra = batch->negativePrompt.value_or("");
+    }
+
+    auto refreshBatch = [&task]() {
+        if (task.batchId.has_value()) {
+            GenerationBatchRepository::refreshStatus(*task.batchId);
+        }
+    };
 
     // BYOK：按任务快照解密凭据；缺失/失效时任务直接失败，绝不回退系统 Key
     json credentials = json::object();
@@ -238,6 +272,7 @@ void GenerationService::processTask(const std::string &taskId) {
             task.status = "failed";
             task.errorMessage = resolved.error;
             GenerationTaskRepository::updateResult(task);
+            refreshBatch();
             spdlog::error("生成任务因 BYOK 凭据不可用而失败: {} | {}", taskId, resolved.error);
             return;
         }
@@ -256,6 +291,9 @@ void GenerationService::processTask(const std::string &taskId) {
         bookId,
         task.id,
         task.parameters,
+        parsedData,
+        consistencyPrompt,
+        negativePromptExtra,
         credentials,
         aiResult,
         error);
@@ -275,6 +313,7 @@ void GenerationService::processTask(const std::string &taskId) {
         task.status = "failed";
         task.errorMessage = error;
         GenerationTaskRepository::updateResult(task);
+        refreshBatch();
         spdlog::error("生成任务失败: {} | {}", taskId, error);
         return;
     }
@@ -297,6 +336,7 @@ void GenerationService::processTask(const std::string &taskId) {
         task.status = "failed";
         task.errorMessage = "生成图记录保存失败";
         GenerationTaskRepository::updateResult(task);
+        refreshBatch();
         spdlog::error("生成图落库失败: task={}", taskId);
         return;
     }
@@ -309,6 +349,7 @@ void GenerationService::processTask(const std::string &taskId) {
     task.resultUrl = image.imageUrl();
     task.modelUsed = aiResult.modelUsed;
     GenerationTaskRepository::updateResult(task);
+    refreshBatch();
     spdlog::info("生成任务完成: {} | image={}", taskId, image.id);
 }
 
@@ -325,10 +366,10 @@ ServiceResult GenerationService::createTask(const std::string &userId,
         return result;
     }
     if (!AiCredentialRules::shouldExemptQuota(byok.llm, byok.image)) {
-        if (!checkGlobalDailyQuota(result)) {
+        if (!checkGlobalDailyQuota(1, result)) {
             return result;
         }
-        if (!checkGuestQuota(userId, isGuest, result)) {
+        if (!checkGuestQuota(userId, isGuest, 1, result)) {
             return result;
         }
     }
@@ -474,10 +515,10 @@ ServiceResult GenerationService::regenerate(const std::string &userId,
         return result;
     }
     if (!AiCredentialRules::shouldExemptQuota(byok.llm, byok.image)) {
-        if (!checkGlobalDailyQuota(result)) {
+        if (!checkGlobalDailyQuota(1, result)) {
             return result;
         }
-        if (!checkGuestQuota(userId, isGuest, result)) {
+        if (!checkGuestQuota(userId, isGuest, 1, result)) {
             return result;
         }
     }
@@ -523,4 +564,28 @@ ServiceResult GenerationService::regenerate(const std::string &userId,
         {"created_at", task.createdAt.value_or("")}
     };
     return result;
+}
+
+bool GenerationService::checkImageQuota(const std::string &userId,
+                                        bool isGuest,
+                                        int count,
+                                        bool byokLlm,
+                                        bool byokImage,
+                                        ServiceResult &result) {
+    if (count < 1) {
+        result.code = 422;
+        result.message = "生成张数必须至少为 1";
+        return false;
+    }
+    if (AiCredentialRules::shouldExemptQuota(byokLlm, byokImage)) {
+        return true;
+    }
+    if (!checkGlobalDailyQuota(count, result)) {
+        return false;
+    }
+    return checkGuestQuota(userId, isGuest, count, result);
+}
+
+bool GenerationService::enqueueTask(const std::string &taskId) {
+    return enqueue(taskId);
 }

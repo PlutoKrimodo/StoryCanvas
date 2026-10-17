@@ -43,6 +43,34 @@ def test_generate_defaults_book_to_unassigned(client: TestClient, storage_root):
     assert image["width"] * image["height"] >= 921600
 
 
+def test_generate_reuses_parsed_data_and_consistency(client: TestClient):
+    """批次任务必须复用 parsed_data，并把本格描述与一致性前缀注入 Prompt。"""
+    resp = client.post(
+        "/api/v1/images/generate",
+        json={
+            "text": "第二格：小女孩把小鸟捧在手心",
+            "style": "watercolor",
+            "parsed_data": {
+                "characters": [{"name": "小女孩", "appearance": "红色雨衣"}],
+                "scene": {"location": "森林"},
+                "objects": ["小鸟"],
+                "actions": ["捧着"],
+                "emotions": ["温柔"],
+                "style": {},
+            },
+            "consistency_prompt": "Keep the same character design across all panels.",
+            "negative_prompt_extra": "角色变形",
+            "parameters": {"size": "1024x1024", "seed": 42},
+        },
+    )
+    assert resp.status_code == 200
+    prompt = resp.json()["prompt"]
+    assert "Keep the same character design" in prompt
+    assert "second" not in prompt  # 中文描述按原样进入 Prompt
+    assert "小女孩把小鸟捧在手心" in prompt
+    assert resp.json()["image"]["seed"] == 42
+
+
 def test_generate_rejects_empty_text(client: TestClient):
     resp = client.post("/api/v1/images/generate", json={"text": ""})
     assert resp.status_code == 422

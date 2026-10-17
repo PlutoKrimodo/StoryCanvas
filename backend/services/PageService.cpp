@@ -7,6 +7,8 @@
 #include "../repositories/BookRepository.h"
 #include "../repositories/GeneratedImageRepository.h"
 
+#include <map>
+
 namespace {
 
 ServiceResult notFound(const std::string &message) {
@@ -64,6 +66,67 @@ ServiceResult PageService::savePage(const std::string &userId,
     result.code = 200;
     result.message = "保存成功";
     result.data = page.toJson();
+    return result;
+}
+
+ServiceResult PageService::saveBatchPages(const std::string &userId,
+                                          const std::string &bookId,
+                                          const SaveBatchPagesRequest &req) {
+    ServiceResult result;
+
+    auto book = BookRepository::findById(bookId);
+    if (!book.has_value()) {
+        return notFound("绘本不存在");
+    }
+    if (book->userId != userId) {
+        return forbidden("无权操作该绘本");
+    }
+
+    constexpr int kMaxPagesPerBook = 50;
+    if (BookPageRepository::countByBookId(bookId) +
+            static_cast<int>(req.imageIds.size()) >
+        kMaxPagesPerBook) {
+        result.code = 422;
+        result.message = "加入后超过单本绘本 50 页上限";
+        return result;
+    }
+
+    auto images = GeneratedImageRepository::findByIdsAndUser(req.imageIds, userId);
+    if (!images.has_value()) {
+        result.code = 500;
+        result.message = "查询生成图失败，请稍后重试";
+        return result;
+    }
+    if (images->size() != req.imageIds.size()) {
+        return notFound("部分图片不存在或无权使用");
+    }
+
+    std::map<std::string, GeneratedImage> byId;
+    for (const auto &image : *images) {
+        byId[image.id] = image;
+    }
+    std::vector<GeneratedImage> ordered;
+    ordered.reserve(req.imageIds.size());
+    for (const auto &id : req.imageIds) {
+        ordered.push_back(byId.at(id));
+    }
+
+    auto pages = BookPageRepository::insertBatch(bookId, ordered);
+    if (!pages.has_value()) {
+        result.code = 500;
+        result.message = "批量保存到绘本失败";
+        return result;
+    }
+
+    json items = json::array();
+    for (const auto &page : *pages) {
+        items.push_back(page.toJson());
+    }
+
+    result.success = true;
+    result.code = 200;
+    result.message = "已加入绘本";
+    result.data = {{"items", items}};
     return result;
 }
 

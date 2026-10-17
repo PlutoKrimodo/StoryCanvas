@@ -42,3 +42,34 @@ std::vector<FieldError> SavePageRequest::getErrors() const {
 bool SavePageRequest::validate() const {
     return getErrors().empty();
 }
+
+SaveBatchPagesRequest SaveBatchPagesRequest::fromJson(const json &j) {
+    SaveBatchPagesRequest req;
+    if (j.is_object() && j.contains("image_ids") && j["image_ids"].is_array()) {
+        for (const auto &item : j["image_ids"]) {
+            if (item.is_string()) {
+                req.imageIds.push_back(item.get<std::string>());
+            }
+        }
+    }
+    return req;
+}
+
+std::vector<FieldError> SaveBatchPagesRequest::getErrors() const {
+    std::vector<FieldError> errors;
+    if (imageIds.empty() || imageIds.size() > 6) {
+        errors.push_back({"image_ids", "一次需提交 1–6 张图片"});
+        return errors;
+    }
+    for (const auto &id : imageIds) {
+        if (id.empty()) {
+            errors.push_back({"image_ids", "图片 ID 不能为空"});
+            break;
+        }
+    }
+    return errors;
+}
+
+bool SaveBatchPagesRequest::validate() const {
+    return getErrors().empty();
+}
