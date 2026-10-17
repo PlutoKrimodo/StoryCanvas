@@ -25,6 +25,9 @@ struct GenerationTask {
     std::optional<std::string> resultUrl;
     std::optional<std::string> errorMessage;
     std::optional<std::string> modelUsed;
+    // BYOK 快照：创建任务时是否使用用户自带 Key（处理阶段据此决定不回退）
+    bool byokLlm = false;
+    bool byokImage = false;
     json parameters = json::object();
     std::optional<std::string> createdAt;
     std::optional<std::string> updatedAt;

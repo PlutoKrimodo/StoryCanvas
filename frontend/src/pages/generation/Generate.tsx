@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { App, Button, Card, Col, Row, Typography } from 'antd'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Alert, App, Button, Card, Col, Row, Typography } from 'antd'
 
 import GenerationForm from '../../components/ai/GenerationForm'
 import GenerationHistory from '../../components/ai/GenerationHistory'
@@ -9,9 +9,11 @@ import ResultPreview from '../../components/ai/ResultPreview'
 import SaveToBookModal from '../../components/ai/SaveToBookModal'
 import AppLayout from '../../components/layout/AppLayout'
 import PageHeader from '../../components/layout/PageHeader'
+import { aiCredentialsApi } from '../../api/aiCredentials'
 import { useGeneration } from '../../hooks/useGeneration'
 import { useAuthStore } from '../../stores/authStore'
 import { useGenerationStore } from '../../stores/generationStore'
+import type { AiCredentialOverview } from '../../types/aiCredentials'
 import { ArtStyle, TaskStatus, type GenerationRequest, type TaskResult } from '../../types/generation'
 
 const { Paragraph, Text } = Typography
@@ -42,6 +44,29 @@ function Generate() {
   const [reuse, setReuse] = useState<ReuseState>({ key: 0 })
   const [saveOpen, setSaveOpen] = useState(false)
   const [savingImageId, setSavingImageId] = useState<string | null>(null)
+  const [byok, setByok] = useState<AiCredentialOverview | null>(null)
+
+  // 低干扰提示条：BYOK 状态只用于引导，失败时不影响生成流程
+  useEffect(() => {
+    let cancelled = false
+    if (!isAuthenticated) {
+      setByok(null)
+      return () => {
+        cancelled = true
+      }
+    }
+    aiCredentialsApi
+      .getOverview()
+      .then(({ data }) => {
+        if (!cancelled) setByok(data.data)
+      })
+      .catch((error) => {
+        console.error('读取 BYOK 状态失败', error)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated])
 
   const handleSubmit = async (payload: GenerationRequest) => {
     setSubmitting(true)
@@ -104,6 +129,61 @@ function Generate() {
         extra={currentTask ? <Button onClick={reset}>重新开始</Button> : undefined}
       />
 
+      <div className="mb-5">
+        {!isAuthenticated ? (
+          <Alert
+            type="info"
+            showIcon
+            message={
+              <span>
+                登录后可配置自己的 API Key，生成不占全站额度。
+                <Link to="/login">去登录</Link>
+              </span>
+            }
+          />
+        ) : byok?.byok_enabled ? (
+          byok.quota_exempt ? (
+            <Alert
+              type="success"
+              showIcon
+              message={
+                <span>
+                  本次将使用你的 API Key（文本理解 + 图像生成），不占全站每日额度。
+                  <Link to="/profile#ai-credentials">管理 Key</Link>
+                </span>
+              }
+            />
+          ) : byok.credentials.llm || byok.credentials.image ? (
+            <Alert
+              type="info"
+              showIcon
+              message={
+                <span>
+                  已启用部分 BYOK：
+                  {byok.credentials.llm ? '文本理解' : ''}
+                  {byok.credentials.llm && byok.credentials.image ? '、' : ''}
+                  {byok.credentials.image ? '图像生成' : ''}
+                  使用你的 Key，其余仍用系统 Key；
+                  {byok.quota_exempt ? '不占全站额度。' : '仍会计入每日限额。'}
+                  <Link to="/profile#ai-credentials">继续配置</Link>
+                </span>
+              }
+            />
+          ) : (
+            <Alert
+              type="info"
+              showIcon
+              message={
+                <span>
+                  用自己的 API Key 生成，可免每日限额。
+                  <Link to="/profile#ai-credentials">去配置</Link>
+                </span>
+              }
+            />
+          )
+        ) : null}
+      </div>
+
       <Row gutter={[24, 24]}>
         <Col xs={24} lg={14}>
           {/* GenerationForm 不再自带 Card，外壳由此处提供（docs/17 §4.1 容器嵌套修正） */}
@@ -125,6 +205,21 @@ function Generate() {
               onCancel={handleCancel}
               onRegenerate={completed || currentTask?.status === TaskStatus.FAILED ? handleRegenerate : undefined}
             />
+            {currentTask?.status === TaskStatus.FAILED &&
+            (currentTask.byok_llm || currentTask.byok_image) ? (
+              <Alert
+                className="mt-3"
+                type="info"
+                showIcon
+                message={
+                  <span>
+                    本次使用了你配置的 API Key。若提示 Key 无效或额度不足，请到
+                    <Link to="/profile#ai-credentials">个人中心</Link>
+                    更新后重试。
+                  </span>
+                }
+              />
+            ) : null}
           </div>
 
           {completed && currentTask ? (

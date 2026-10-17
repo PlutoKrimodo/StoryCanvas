@@ -102,18 +102,21 @@ void RateLimitFilter::registerGlobalAdvice() {
     if (ConfigManager::rateLimitAnonPerMin <= 0 ||
         ConfigManager::rateLimitAuthPerMin <= 0 ||
         ConfigManager::rateLimitGenerationPerMin <= 0 ||
-        ConfigManager::rateLimitGuestTokenPerMin <= 0) {
+        ConfigManager::rateLimitGuestTokenPerMin <= 0 ||
+        ConfigManager::rateLimitCredentialTestPerMin <= 0) {
         spdlog::warn("限流额度存在 <=0 的档位：该档位将不限制");
     }
 
     drogon::app().registerSyncAdvice(
         [](const drogon::HttpRequestPtr &req) { return check(req); });
 
-    spdlog::info("全局限流已启用 | 匿名 {}/分(IP) | 认证 {}/分(用户) | 生成 {}/分 | 游客会话 {}/分(IP)",
+    spdlog::info("全局限流已启用 | 匿名 {}/分(IP) | 认证 {}/分(用户) | 生成 {}/分 | "
+                 "游客会话 {}/分(IP) | Key 测试 {}/分",
                  ConfigManager::rateLimitAnonPerMin,
                  ConfigManager::rateLimitAuthPerMin,
                  ConfigManager::rateLimitGenerationPerMin,
-                 ConfigManager::rateLimitGuestTokenPerMin);
+                 ConfigManager::rateLimitGuestTokenPerMin,
+                 ConfigManager::rateLimitCredentialTestPerMin);
 }
 
 drogon::HttpResponsePtr RateLimitFilter::check(const drogon::HttpRequestPtr &req) {
@@ -156,6 +159,20 @@ drogon::HttpResponsePtr RateLimitFilter::check(const drogon::HttpRequestPtr &req
                                 kWindowSeconds)) {
             return tooManyRequests("guest-token", ipKey,
                                    "游客会话创建过于频繁，请稍后再试");
+        }
+    }
+
+    // BYOK 凭据测试：LLM 会发起一次 1 token 真实调用，需限制频率
+    if (req->method() == drogon::Post &&
+        path == "/api/v1/users/me/ai-credentials/test") {
+        if (!RateLimiter::allow("credential-test:" + identityKey,
+                                ConfigManager::rateLimitCredentialTestPerMin,
+                                kWindowSeconds)) {
+            return tooManyRequests(
+                "credential-test", identityKey,
+                "API Key 测试过于频繁（每分钟最多 " +
+                    std::to_string(ConfigManager::rateLimitCredentialTestPerMin) +
+                    " 次），请稍后再试");
         }
     }
 

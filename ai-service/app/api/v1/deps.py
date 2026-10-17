@@ -11,6 +11,7 @@ from typing import Dict, Type
 
 from fastapi import Header, HTTPException
 
+from ...models.schemas import ImageCredential, ImageGenerateRequest, LLMCredential
 from ...providers.image.base import ImageProvider
 from ...providers.image.doubao_provider import DoubaoProvider
 from ...providers.image.mock_provider import MockImageProvider
@@ -18,7 +19,9 @@ from ...providers.image.wanx_provider import WanxProvider
 from ...providers.llm.base import LLMProvider
 from ...providers.llm.deepseek_provider import DeepSeekProvider
 from ...providers.llm.mock_provider import MockLLMProvider
+from ...providers.llm.openai_compatible import OpenAICompatibleProvider
 from ...services.generation_service import GenerationService
+from ...utils.exceptions import ImageProviderException, LLMProviderException
 from ...services.image_generator import ImageGeneratorService
 from ...services.prompt_optimizer import PromptOptimizerService
 from ...services.text_analyzer import TextAnalyzerService
@@ -67,6 +70,62 @@ def get_generation_service() -> GenerationService:
         analyzer=get_text_analyzer(),
         optimizer=get_prompt_optimizer(),
         image_generator=get_image_generator(),
+    )
+
+
+# ==================== BYOK：按请求构造 Provider ====================
+
+def build_llm_provider(credential: LLMCredential) -> LLMProvider:
+    """按用户凭据构造 LLM Provider。
+
+    注意：**绝不能**走 `lru_cache`，否则第一个用户的 Key 会被后续请求复用。
+    """
+    if credential.provider == "mock":
+        # 仅测试便利：BYOK 接口不会下发 mock，但保留可预测行为
+        return MockLLMProvider()
+    if credential.provider not in ("deepseek", "openai", "dashscope", "zhipu", "custom"):
+        raise LLMProviderException(f"不支持的文本模型厂商：{credential.provider}", 422)
+    return OpenAICompatibleProvider(
+        api_key=credential.api_key,
+        api_base=credential.api_base,
+        model=credential.model,
+        provider=credential.provider,
+    )
+
+
+def build_image_provider(credential: ImageCredential) -> ImageProvider:
+    """按用户凭据构造图像 Provider；不做跨厂商兜底。"""
+    if credential.provider == "doubao":
+        return DoubaoProvider(
+            api_key=credential.api_key,
+            model=credential.model,
+            api_base=credential.api_base,
+        )
+    if credential.provider == "wanx":
+        return WanxProvider(
+            api_key=credential.api_key,
+            model=credential.model,
+            api_base=credential.api_base,
+        )
+    raise ImageProviderException(f"不支持的图像厂商：{credential.provider}", 422)
+
+
+def build_generation_service(request: ImageGenerateRequest) -> GenerationService:
+    """按请求中是否携带凭据，决定使用用户 Key 还是系统默认 Provider。"""
+    llm_provider: LLMProvider = (
+        build_llm_provider(request.llm_credential)
+        if request.llm_credential is not None
+        else get_llm_provider()
+    )
+    image_provider: ImageProvider = (
+        build_image_provider(request.image_credential)
+        if request.image_credential is not None
+        else get_image_provider()
+    )
+    return GenerationService(
+        analyzer=TextAnalyzerService(llm_provider),
+        optimizer=PromptOptimizerService(),
+        image_generator=ImageGeneratorService(image_provider),
     )
 
 

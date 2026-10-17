@@ -84,6 +84,9 @@ export interface TaskResult {
   result?: GenerationResultImage | null
   error_message?: string | null
   model_used?: string | null
+  /** 任务创建时是否使用用户自带 Key（BYOK 快照） */
+  byok_llm?: boolean
+  byok_image?: boolean
   /** 生成参数（含 style / size / seed），用于历史复用 */
   parameters?: Record<string, unknown> | null
   created_at: string

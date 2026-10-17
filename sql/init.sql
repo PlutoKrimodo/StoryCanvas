@@ -29,6 +29,26 @@ CREATE INDEX idx_users_username ON users(username);
 
 COMMENT ON COLUMN users.password_hash IS '密码单向哈希（bcrypt 或 pbkdf2_sha256），禁止明文/可逆加密';
 
+-- ==================== 用户自带 AI 凭据（BYOK）====================
+-- 每个用户每项能力（LLM / 图像）至多一条；api_key 仅以 AES-256-GCM 密文存储。
+-- 明文在加密前附加 userId + capability 前缀，防止密文在用户/能力之间被调包。
+CREATE TABLE user_ai_credentials (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    capability VARCHAR(10) NOT NULL CHECK (capability IN ('llm', 'image')),
+    provider VARCHAR(32) NOT NULL,
+    api_key_enc TEXT NOT NULL,
+    api_key_hint VARCHAR(40) NOT NULL,
+    api_base VARCHAR(500),
+    model VARCHAR(120),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, capability)
+);
+CREATE INDEX idx_user_ai_credentials_user ON user_ai_credentials(user_id);
+COMMENT ON TABLE user_ai_credentials IS '用户自带 AI 凭据（BYOK）；api_key_enc 仅存 AES-256-GCM 密文';
+COMMENT ON COLUMN user_ai_credentials.api_key_hint IS '脱敏提示（如 sk-****abcd），禁止存放完整 Key';
+
 -- ==================== 绘本表 ====================
 CREATE TABLE books (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -90,6 +110,9 @@ CREATE TABLE generation_tasks (
     result_url VARCHAR(500),
     error_message TEXT,
     model_used VARCHAR(100),
+    -- BYOK 任务快照：创建时记录是否使用用户自带 Key，处理阶段据此决定是否可回退
+    byok_llm BOOLEAN NOT NULL DEFAULT false,
+    byok_image BOOLEAN NOT NULL DEFAULT false,
     parameters JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

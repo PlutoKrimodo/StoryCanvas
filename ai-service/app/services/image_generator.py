@@ -41,6 +41,9 @@ class ImageGeneratorService(BaseService):
                 last_error = f"图像生成超时（第 {attempt}/{self.max_retries} 次）"
                 self.logger.warning(last_error)
             except ImageProviderException as exc:
+                if exc.code in (401, 402, 403, 429):
+                    # 用户 Key 无效 / 欠费 / 限流：立即失败，不重试、不重复计费
+                    raise
                 last_error = f"{exc.message}（第 {attempt}/{self.max_retries} 次）"
                 self.logger.warning(last_error)
             except Exception as exc:  # noqa: BLE001 - 统一归集为 Provider 异常

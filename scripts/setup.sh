@@ -48,11 +48,21 @@ fi
 echo "📝 创建 .env 文件..."
 if [ ! -f .env ]; then
     cp .env.example .env
+    # BYOK 需要 ENCRYPTION_KEY 才能加密保存用户 Key：初始化时自动生成，避免首次配置即失败
+    if command -v openssl >/dev/null 2>&1; then
+        ENC_KEY="$(openssl rand -base64 32)"
+        # Base64 可能含 '/' '+' '='，用 '|' 作分隔符避免与 sed 特殊字符冲突
+        sed -i "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=${ENC_KEY}|" .env
+        print_success "已自动生成 ENCRYPTION_KEY（BYOK 加密存储用）"
+        print_warning "该密钥一旦更换，已保存的用户 API Key 将无法解密，需要用户重新保存"
+    else
+        print_warning "未找到 openssl，请手动生成 ENCRYPTION_KEY：openssl rand -base64 32"
+    fi
     print_success ".env 文件已创建"
     print_warning "请编辑 .env 填写 DB_PASSWORD / JWT_SECRET / AI_SERVICE_API_KEY（必填）"
     print_warning "填真实 key 请只用编辑器改 .env：贴进命令行会被记录到本地 CLI 状态文件，这是历史上密钥入库的实际原因"
 else
-    print_warning ".env 文件已存在"
+    print_warning ".env 文件已存在（不会覆盖已有 ENCRYPTION_KEY）"
 fi
 
 # AI Service 独立环境变量（可选，用于单独启动 AI 服务）
@@ -108,9 +118,10 @@ echo "下一步："
 echo "1. 编辑 .env 填写必填密钥（DB_PASSWORD / JWT_SECRET / AI_SERVICE_API_KEY）"
 echo "2. 启动数据库：docker-compose up -d postgres redis"
 echo "3. 初始化数据库：psql -h localhost -U storycanvas -d storycanvas -f sql/init.sql"
-echo "4. 启动后端：cd backend/build && ./storycanvas_backend        # http://localhost:8080/health"
-echo "5. 启动 AI 服务：cd ai-service && source venv/bin/activate && uvicorn app.main:app --reload"
-echo "6. 启动前端：cd frontend && npm run dev                        # http://localhost:5173"
+echo "4. 存量数据库先执行：psql -h localhost -U storycanvas -d storycanvas -f sql/migrate_byok.sql"
+echo "5. 启动后端：cd backend/build && ./storycanvas_backend        # http://localhost:8080/health"
+echo "6. 启动 AI 服务：cd ai-service && source venv/bin/activate && uvicorn app.main:app --reload"
+echo "7. 启动前端：cd frontend && npm run dev                        # http://localhost:5173"
 echo ""
 echo "或者一键启动全部服务：docker-compose up -d"
 echo ""

@@ -18,10 +18,15 @@ from .base import LLMProvider, Message
 class DeepSeekProvider(LLMProvider):
     """DeepSeek Chat 实现。"""
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        api_base: Optional[str] = None,
+    ) -> None:
         super().__init__()
         self.api_key = api_key if api_key is not None else settings.DEEPSEEK_API_KEY
-        self.api_base = settings.DEEPSEEK_API_BASE.rstrip("/")
+        self.api_base = (api_base or settings.DEEPSEEK_API_BASE).rstrip("/")
         self.model = model or settings.DEEPSEEK_MODEL
 
     @property

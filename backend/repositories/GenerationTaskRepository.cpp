@@ -15,7 +15,7 @@ const char *kSelectColumns =
     "SELECT t.id::text AS id, t.user_id::text AS user_id, t.book_id::text AS book_id, "
     "       t.page_id::text AS page_id, t.prompt, t.original_text, "
     "       t.parsed_data::text AS parsed_data, t.status, t.result_url, t.error_message, "
-    "       t.model_used, t.parameters::text AS parameters, "
+    "       t.model_used, t.byok_llm, t.byok_image, t.parameters::text AS parameters, "
     "       t.created_at::text AS created_at, t.updated_at::text AS updated_at, "
     "       t.completed_at::text AS completed_at, "
     "       g.id::text AS image_id, g.width AS image_width, g.height AS image_height "
@@ -35,15 +35,19 @@ bool GenerationTaskRepository::create(GenerationTask &task) {
 
         auto result = db->execSqlSync(
             "INSERT INTO generation_tasks "
-            "(user_id, book_id, page_id, original_text, prompt, status, parameters) "
-            "VALUES ($1, NULLIF($2, '')::uuid, NULLIF($3, '')::uuid, NULLIF($4, ''), $5, 'pending', $6::jsonb) "
+            "(user_id, book_id, page_id, original_text, prompt, status, parameters, "
+            " byok_llm, byok_image) "
+            "VALUES ($1, NULLIF($2, '')::uuid, NULLIF($3, '')::uuid, NULLIF($4, ''), $5, "
+            "        'pending', $6::jsonb, $7, $8) "
             "RETURNING id::text, created_at::text, updated_at::text",
             task.userId,
             task.bookId.value_or(""),
             task.pageId.value_or(""),
             task.originalText.value_or(""),
             task.prompt,
-            parametersDump);
+            parametersDump,
+            task.byokLlm,
+            task.byokImage);
 
         if (!result.empty()) {
             task.id = std::string(result[0]["id"].as<std::string_view>());
@@ -216,10 +220,12 @@ int GenerationTaskRepository::countCreatedToday() {
         // created_at 是 TIMESTAMPTZ，裸 date_trunc('day', now()) 按 UTC 切日，
         // 会出现早上 8 点才重置的偏差，故显式按 Asia/Shanghai 取当日零点。
         // 不按状态过滤：failed 已计费，cancelled 也可能发生在 Ark 调用发出之后。
+        // BYOK 双项任务不花系统 Key 的钱，也不占用其他人的全站额度。
         auto result = db->execSqlSync(
             "SELECT COUNT(*)::int AS cnt FROM generation_tasks "
             "WHERE created_at >= ("
-            "date_trunc('day', now() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai')");
+            "date_trunc('day', now() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai') "
+            "AND NOT (byok_llm AND byok_image)");
         return result.empty() ? 0 : result[0]["cnt"].as<int>();
     } catch (const std::exception &e) {
         spdlog::error("统计今日全站任务数失败: {}", e.what());

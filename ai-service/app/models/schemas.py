@@ -81,11 +81,58 @@ class PromptOptimizeResponse(BaseModel):
     parsed_data: ParsedData
 
 
+class LLMCredential(BaseModel):
+    """用户自带的 LLM 凭据（BYOK）。
+
+    仅存在于单次请求内存；Provider 按请求显式构造，绝不进入 `lru_cache`。
+    """
+
+    provider: str = Field(..., min_length=1, max_length=32, description="deepseek/openai/...")
+    api_key: str = Field(..., min_length=8, max_length=200)
+    api_base: Optional[str] = Field(None, max_length=500)
+    model: Optional[str] = Field(None, max_length=120)
+
+
+class ImageCredential(BaseModel):
+    """用户自带的图像凭据（BYOK）：仅支持豆包 / 通义万相两种协议。"""
+
+    provider: str = Field(..., pattern="^(doubao|wanx)$")
+    api_key: str = Field(..., min_length=8, max_length=200)
+    api_base: Optional[str] = Field(None, max_length=500)
+    model: Optional[str] = Field(None, max_length=120)
+
+
+class CredentialTestRequest(BaseModel):
+    """凭据测试请求（由 C++ 后端转发）。"""
+
+    capability: str = Field(..., pattern="^(llm|image)$")
+    provider: str = Field(..., min_length=1, max_length=32)
+    api_key: str = Field(..., min_length=8, max_length=200)
+    api_base: Optional[str] = Field(None, max_length=500)
+    model: Optional[str] = Field(None, max_length=120)
+
+
+class CredentialTestResponse(BaseModel):
+    """凭据测试结果。
+
+    业务失败（Key 无效 / 额度不足）也返回 200 + ok=false，
+    便于后端直接展示可读原因；只有请求本身非法才由 FastAPI 返回 4xx。
+    """
+
+    ok: bool
+    verified: bool = False
+    latency_ms: int = 0
+    message: str = ""
+
+
 class ImageGenerateRequest(BaseModel):
     """图像生成请求（Phase 5，无状态一站式）
 
     请求方（C++ 后端）负责持有任务状态，这里一次调用完成：
     文本解析 → Prompt 优化 → 图像生成 → 落盘。
+
+    `llm_credential` / `image_credential` 为 BYOK 可选字段：
+    有值时按请求构造 Provider，缺失时回退系统默认 Provider。
     """
 
     text: str = Field(..., min_length=1, max_length=2000, description="用户输入的故事文本")
@@ -94,6 +141,12 @@ class ImageGenerateRequest(BaseModel):
     book_id: Optional[str] = Field(None, description="绘本 ID（用于存储分层）")
     task_id: Optional[str] = Field(None, description="后端任务 ID（仅透传记录，不参与状态管理）")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="生成参数（宽高等）")
+    llm_credential: Optional[LLMCredential] = Field(
+        None, description="用户自带 LLM 凭据（可选）"
+    )
+    image_credential: Optional[ImageCredential] = Field(
+        None, description="用户自带图像凭据（可选）"
+    )
 
 
 class GeneratedImageInfo(BaseModel):

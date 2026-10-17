@@ -26,6 +26,8 @@ json GenerationTask::toJson() const {
         {"result", result},
         {"error_message", rowutil::toJsonValue(errorMessage)},
         {"model_used", rowutil::toJsonValue(modelUsed)},
+        {"byok_llm", byokLlm},
+        {"byok_image", byokImage},
         {"parameters", parameters},
         {"created_at", rowutil::toJsonValue(createdAt)},
         {"updated_at", rowutil::toJsonValue(updatedAt)},
@@ -46,6 +48,8 @@ GenerationTask GenerationTask::fromRow(const drogon::orm::Row &row) {
     task.resultUrl = rowutil::optString(row["result_url"]);
     task.errorMessage = rowutil::optString(row["error_message"]);
     task.modelUsed = rowutil::optString(row["model_used"]);
+    task.byokLlm = row["byok_llm"].as<bool>();
+    task.byokImage = row["byok_image"].as<bool>();
     task.parameters = rowutil::jsonObjectOrEmpty(row["parameters"]);
     task.createdAt = rowutil::optString(row["created_at"]);
     task.updatedAt = rowutil::optString(row["updated_at"]);

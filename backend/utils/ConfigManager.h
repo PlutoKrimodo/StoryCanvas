@@ -42,6 +42,10 @@ public:
     static int rateLimitAuthPerMin;           // 认证（按用户）每分钟上限
     static int rateLimitGenerationPerMin;     // AI 生成接口（创建 / 重新生成）每分钟上限
     static int rateLimitGuestTokenPerMin;     // 游客会话签发（按 IP）每分钟上限
+    static int rateLimitCredentialTestPerMin; // BYOK 凭据测试（按用户）每分钟上限
+
+    // BYOK：用户自带 AI Key
+    static bool byokEnabled;                  // 总开关；关闭后接口 404、生成忽略用户凭据
 
     // AI Service
     static std::string aiServiceUrl;

@@ -15,6 +15,7 @@ StoryCanvas 是一个基于生成式 AI 的儿童绘本智能创作与图像生�
 - **用户管理**: 注册、登录、JWT 双 Token 认证与刷新、密码 bcrypt 加密存储
 - **绘本管理**: 创建、查看、更新、删除绘本项目（分页 + 状态筛选 + 归属隔离）
 - **AI 图像生成**: 文本解析（角色/场景/物品/动作/风格）、Prompt 优化、图像生成
+- **用户自带 API Key（BYOK）**: 登录用户可接入自己的 LLM / 图像 Key，选厂商、粘贴 Key、保存验证三步完成；AES-256-GCM 加密入库、脱敏回显，双项配置时免全站每日限额
 - **任务管理**: 后端内存队列 + 工作线程异步生成，任务状态落库与轮询查询
 - **结果预览**: 生成结果展示、放大、单张下载与重新生成
 - **保存到绘本**: 把生成图按页绑定到绘本（`book_pages.image_id`）
@@ -130,6 +131,23 @@ npm install
 npm run dev                              # http://localhost:5173
 ```
 
+### 用户自带 API Key（BYOK）
+
+登录后进入「个人中心 → 我的 AI API Key」，三步即可接入：
+
+1. 选择厂商（默认 DeepSeek / 豆包·Seedream，也可选 OpenAI、通义千问、智谱 GLM）；
+2. 粘贴 API Key；Base URL 与推荐模型会自动带出，只有自定义厂商才需要展开「高级设置」；
+3. 点击「保存并验证」：LLM 用 1 token 真实探测，图像仅做格式校验（避免计费）。
+
+说明：
+
+- Key 仅以 **AES-256-GCM 密文**入库，接口只回显 `sk-****abcd`，前端不持久化；
+- **双项都配置**时，该用户的任务不占全站 `GLOBAL_DAILY_GENERATION_CAP`；只配一项仍照常计入；
+- 已配置的能力调用失败时任务直接失败并提示更新 Key，**不会静默回退系统 Key**；
+- 需要在 `.env` 配置 `ENCRYPTION_KEY`（`./scripts/setup.sh` 首次创建 `.env` 时会自动生成）；
+- 存量数据库需执行：`psql -h localhost -U storycanvas -d storycanvas -f sql/migrate_byok.sql`；
+- 故障回滚：设置 `BYOK_ENABLED=false` 并重启后端，所有请求回到系统 Key。
+
 ### Docker 部署
 
 ```bash
@@ -209,6 +227,7 @@ StoryCanvas/
 - 创建绘本、查看绘本列表与详情
 - AI 文本解析与 Prompt 优化
 - AI 图像生成（真实厂商 + Mock 降级）
+- 用户自带 API Key（BYOK，LLM + 图像）
 - 生成结果预览
 - 重新生成 / 取消任务
 - 保存到绘本（页容器绑定 `image_id`）
@@ -253,6 +272,7 @@ npx tsc --noEmit && npm test
 ./scripts/verify_m3.sh    # Phase 4 文本解析
 ./scripts/verify_m4.sh    # Phase 5 图像生成闭环
 ./scripts/verify_guest.sh # T-1 游客生成 + 认领（能力层）
+./scripts/verify_byok.sh  # BYOK 凭据（需迁移 + ENCRYPTION_KEY）
 ```
 ---
 ## 贡献

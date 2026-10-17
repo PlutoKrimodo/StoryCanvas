@@ -32,6 +32,9 @@ int ConfigManager::rateLimitAnonPerMin = 100;
 int ConfigManager::rateLimitAuthPerMin = 1000;
 int ConfigManager::rateLimitGenerationPerMin = 10;
 int ConfigManager::rateLimitGuestTokenPerMin = 10;
+int ConfigManager::rateLimitCredentialTestPerMin = 10;
+
+bool ConfigManager::byokEnabled = true;
 
 std::string ConfigManager::aiServiceUrl = "http://localhost:8000";
 std::string ConfigManager::aiServiceApiKey;
@@ -216,6 +219,13 @@ void ConfigManager::applyEnv() {
     rateLimitGuestTokenPerMin =
         toInt(resolve("RATE_LIMIT_GUEST_TOKEN_PER_MIN", "rate_limit", "guest_token_per_min", "10"),
               10);
+    rateLimitCredentialTestPerMin =
+        toInt(resolve("RATE_LIMIT_CREDENTIAL_TEST_PER_MIN", "rate_limit",
+                      "credential_test_per_min", "10"),
+              10);
+
+    // BYOK：默认开启；关闭后用户凭据接口不可用、生成链路忽略用户 Key
+    byokEnabled = toBool(resolve("BYOK_ENABLED", "byok", "enabled", "true"), true);
 
     aiServiceUrl = resolve("AI_SERVICE_URL", "ai_service", "url", "http://localhost:8000");
     aiServiceApiKey = resolve("AI_SERVICE_API_KEY", "ai_service", "api_key", "");
@@ -253,8 +263,16 @@ void ConfigManager::validate() {
                      rateLimitAnonPerMin, rateLimitAuthPerMin,
                      rateLimitGenerationPerMin, rateLimitGuestTokenPerMin);
     }
-    if (encryptionKey.empty()) {
+    if (byokEnabled && encryptionKey.empty()) {
+        // BYOK 的 API Key 必须加密落库；没有密钥时接口返回 503，这里提前给出可执行提示
+        spdlog::warn("BYOK_ENABLED=true 但 ENCRYPTION_KEY 未配置："
+                     "用户将无法保存自带 API Key（生成仍可用系统 Key）。"
+                     "生成方式：openssl rand -base64 32");
+    } else if (encryptionKey.empty()) {
         spdlog::debug("ENCRYPTION_KEY 未配置：未启用敏感字段 AES 加密存储");
+    }
+    if (byokEnabled && rateLimitCredentialTestPerMin <= 0) {
+        spdlog::warn("RATE_LIMIT_CREDENTIAL_TEST_PER_MIN <= 0：凭据测试接口将不限制频率");
     }
 }
 
@@ -264,6 +282,7 @@ void ConfigManager::init() {
     applyEnv();
     validate();
 
-    spdlog::info("配置加载完成 | DB {}:{}/{} | AI Service {} | CORS {} | 日志级别 {}",
-                 dbHost, dbPort, dbName, aiServiceUrl, corsOrigins, logLevel);
+    spdlog::info("配置加载完成 | DB {}:{}/{} | AI Service {} | BYOK {} | CORS {} | 日志级别 {}",
+                 dbHost, dbPort, dbName, aiServiceUrl, byokEnabled ? "on" : "off",
+                 corsOrigins, logLevel);
 }

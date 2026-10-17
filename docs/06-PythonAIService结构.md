@@ -1107,6 +1107,16 @@ STORAGE_PATH=./storage
 2. 在 `ArtStyle` 枚举中添加新风格
 3. 在 `PromptOptimizerService` 中添加风格处理
 
+### 7.3 BYOK：按请求凭据构造 Provider（2026-10-17 追加）
+
+- 新增端点 `POST /api/v1/credentials/test`：LLM 用 1 token 真实探测；图像只做格式校验，避免计费。
+- `ImageGenerateRequest` 增加可选 `llm_credential` / `image_credential`；`api/v1/images.py` 不再依赖全局 `get_generation_service`，改为 `build_generation_service(request)`。
+- `api/v1/deps.py` 新增 `build_llm_provider` / `build_image_provider`：**必须每次显式构造**，禁止进入 `lru_cache`，否则会把首个用户的 Key 泄漏给后续请求。
+- LLM 统一走 `providers/llm/openai_compatible.py`（DeepSeek / OpenAI / 通义兼容模式 / 智谱均兼容 `/chat/completions`）；图像豆包 / 万相 Provider 增加 `api_base` 构造参数。
+- `401/402/403/429` 视为不可重试：`ImageGeneratorService` 立即抛出，避免用户 Key 失效时重复计费。
+- `utils/url_safety.py`：自定义 Base URL 仅允许 HTTPS、默认 443、完整域名；DNS 解析后拒绝非公网地址（SSRF）。
+- 凭据只存在于请求内存；日志与异常不得拼接请求头/请求体。
+
 ---
 
 **文档结束**

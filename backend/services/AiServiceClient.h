@@ -18,6 +18,14 @@ struct AiImageResult {
     std::string modelUsed;
 };
 
+/** 凭据测试结果（AI 服务已把厂商错误归一为可读 message）。 */
+struct AiCredentialTestResult {
+    bool ok = false;
+    bool verified = false;   // LLM 为真实探测；图像为格式校验，固定 false
+    int latencyMs = 0;
+    std::string message;
+};
+
 /**
  * 后端 → Python AI Service 的内部调用客户端。
  *
@@ -36,6 +44,21 @@ public:
                               const std::string &bookId,
                               const std::string &taskId,
                               const json &parameters,
+                              const json &credentials,
                               AiImageResult &out,
                               std::string &error);
+
+    /**
+     * 调用 `POST {AI_SERVICE_URL}/api/v1/credentials/test`（10 秒超时）。
+     *
+     * 返回 false 仅表示「未能拿到 AI 服务响应」（网络 / 响应格式问题）；
+     * 厂商拒绝 Key 属于业务结果，返回 true 且 out.ok=false。
+     */
+    static bool testCredential(const std::string &capability,
+                               const std::string &provider,
+                               const std::string &apiKey,
+                               const std::string &apiBase,
+                               const std::string &model,
+                               AiCredentialTestResult &out,
+                               std::string &error);
 };

@@ -1,6 +1,7 @@
 import { Avatar, Button, Card, Typography } from 'antd'
 import { UserOutlined } from '@ant-design/icons'
 
+import AiCredentialCard from '../../components/profile/AiCredentialCard'
 import AppLayout from '../../components/layout/AppLayout'
 import PageHeader from '../../components/layout/PageHeader'
 import { useAuth } from '../../hooks/useAuth'
@@ -53,6 +54,8 @@ function Profile() {
             </Button>
           </div>
         </Card>
+
+        <AiCredentialCard />
       </div>
     </AppLayout>
   )

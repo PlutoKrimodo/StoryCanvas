@@ -10,8 +10,10 @@
 #include "../repositories/BookRepository.h"
 #include "../repositories/GeneratedImageRepository.h"
 #include "../repositories/GenerationTaskRepository.h"
+#include "../utils/AiCredentialRules.h"
 #include "../utils/ConfigManager.h"
 #include "AiServiceClient.h"
+#include "UserAiCredentialService.h"
 
 // ==================== 静态成员定义 ====================
 std::queue<std::string> GenerationService::queue_;
@@ -85,6 +87,32 @@ bool checkGlobalDailyQuota(ServiceResult &result) {
                      std::to_string(ConfigManager::globalDailyGenerationCap) +
                      " 张），请明天再来";
     return false;
+}
+
+/** BYOK 任务快照：创建任务时两项能力是否都由用户自带 Key 承担。 */
+struct ByokState {
+    bool llm = false;
+    bool image = false;
+};
+
+/**
+ * 读取用户 BYOK 配置。
+ *
+ * 游客是影子用户、无法配置凭据，直接按「未配置」处理；
+ * 数据库查询失败时拒绝创建任务，避免「以为免额度、实际扣系统成本」。
+ */
+bool resolveByokState(const std::string &userId,
+                      bool isGuest,
+                      ByokState &state,
+                      ServiceResult &result) {
+    if (isGuest) {
+        return true;
+    }
+    if (!UserAiCredentialService::loadConfigured(userId, state.llm, state.image)) {
+        result = serverError("读取你的 API Key 配置失败，请稍后重试");
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -200,6 +228,27 @@ void GenerationService::processTask(const std::string &taskId) {
     const std::string style = task.parameters.is_object()
                                   ? task.parameters.value("style", std::string("cartoon"))
                                   : std::string("cartoon");
+
+    // BYOK：按任务快照解密凭据；缺失/失效时任务直接失败，绝不回退系统 Key
+    json credentials = json::object();
+    if (task.byokLlm || task.byokImage) {
+        auto resolved = UserAiCredentialService::resolveForTask(
+            task.userId, task.byokLlm, task.byokImage);
+        if (!resolved.ok) {
+            task.status = "failed";
+            task.errorMessage = resolved.error;
+            GenerationTaskRepository::updateResult(task);
+            spdlog::error("生成任务因 BYOK 凭据不可用而失败: {} | {}", taskId, resolved.error);
+            return;
+        }
+        if (resolved.llm.has_value()) {
+            credentials["llm_credential"] = resolved.llm->toRequestJson();
+        }
+        if (resolved.image.has_value()) {
+            credentials["image_credential"] = resolved.image->toRequestJson();
+        }
+    }
+
     const bool ok = AiServiceClient::generateImage(
         task.originalText.value_or(task.prompt),
         style,
@@ -207,6 +256,7 @@ void GenerationService::processTask(const std::string &taskId) {
         bookId,
         task.id,
         task.parameters,
+        credentials,
         aiResult,
         error);
 
@@ -218,6 +268,10 @@ void GenerationService::processTask(const std::string &taskId) {
     }
 
     if (!ok) {
+        if (task.byokLlm || task.byokImage) {
+            error = "本次使用你配置的 API Key；失败原因：" + error +
+                    "。请到个人中心检查 Key 后重试";
+        }
         task.status = "failed";
         task.errorMessage = error;
         GenerationTaskRepository::updateResult(task);
@@ -264,12 +318,19 @@ ServiceResult GenerationService::createTask(const std::string &userId,
                                             const CreateGenerationRequest &req) {
     ServiceResult result;
 
-    // 0. 成本封顶：先全站每日额度，再游客个人额度（用尽均返回 429）
-    if (!checkGlobalDailyQuota(result)) {
+    // 0. BYOK 快照：双项都由用户自带 Key 时豁免系统额度；
+    //    只配一项（或未配置）仍照常占用全站 / 游客额度。
+    ByokState byok;
+    if (!resolveByokState(userId, isGuest, byok, result)) {
         return result;
     }
-    if (!checkGuestQuota(userId, isGuest, result)) {
-        return result;
+    if (!AiCredentialRules::shouldExemptQuota(byok.llm, byok.image)) {
+        if (!checkGlobalDailyQuota(result)) {
+            return result;
+        }
+        if (!checkGuestQuota(userId, isGuest, result)) {
+            return result;
+        }
     }
 
     // 1. 归属校验（可选绑定绘本 / 页）
@@ -293,6 +354,8 @@ ServiceResult GenerationService::createTask(const std::string &userId,
     if (!req.pageId.empty()) task.pageId = req.pageId;
     task.originalText = req.text;
     task.prompt = "";
+    task.byokLlm = byok.llm;
+    task.byokImage = byok.image;
     task.parameters = req.parameters.is_object() ? req.parameters : json::object();
     task.parameters["style"] = req.style;  // 供工作线程回传给 AI 服务
 
@@ -405,12 +468,18 @@ ServiceResult GenerationService::regenerate(const std::string &userId,
                                             const RegenerateRequest &req) {
     ServiceResult result;
 
-    // 重新生成同样消耗全站额度与一张游客额度
-    if (!checkGlobalDailyQuota(result)) {
+    // 重新生成按「当前」配置重新打快照；双项 BYOK 仍豁免系统额度
+    ByokState byok;
+    if (!resolveByokState(userId, isGuest, byok, result)) {
         return result;
     }
-    if (!checkGuestQuota(userId, isGuest, result)) {
-        return result;
+    if (!AiCredentialRules::shouldExemptQuota(byok.llm, byok.image)) {
+        if (!checkGlobalDailyQuota(result)) {
+            return result;
+        }
+        if (!checkGuestQuota(userId, isGuest, result)) {
+            return result;
+        }
     }
 
     auto origin = GenerationTaskRepository::findById(taskId);
@@ -428,6 +497,8 @@ ServiceResult GenerationService::regenerate(const std::string &userId,
     task.pageId = origin->pageId;
     task.originalText = origin->originalText;
     task.prompt = "";
+    task.byokLlm = byok.llm;
+    task.byokImage = byok.image;
     task.parameters = origin->parameters;
     if (req.parameters.is_object()) {
         for (auto it = req.parameters.begin(); it != req.parameters.end(); ++it) {

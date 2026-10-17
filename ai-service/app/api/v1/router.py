@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from . import analysis, health, images
+from . import analysis, credentials, health, images
 
 api_router = APIRouter()
 
@@ -23,4 +23,11 @@ api_router.include_router(
     images.router,
     prefix="/images",
     tags=["Images"],
+)
+
+# BYOK 凭据测试
+api_router.include_router(
+    credentials.router,
+    prefix="/credentials",
+    tags=["Credentials"],
 )

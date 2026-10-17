@@ -10,17 +10,22 @@ from typing import Dict, Optional
 from ...models.schemas import ImageGenerationParams, ImageGenerationResult
 from ...utils.config import settings
 from ...utils.exceptions import ImageProviderException
-from ...utils.http_client import post_json
+from ...utils.http_client import describe_http_error, post_json
 from .base import ImageProvider
 
 
 class DoubaoProvider(ImageProvider):
     """火山方舟 · 豆包 Seedream 实现。"""
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        api_base: Optional[str] = None,
+    ) -> None:
         super().__init__()
         self.api_key = api_key if api_key is not None else settings.ARK_API_KEY
-        self.api_base = settings.ARK_API_BASE.rstrip("/")
+        self.api_base = (api_base or settings.ARK_API_BASE).rstrip("/")
         self.model = model or settings.ARK_IMAGE_MODEL
 
     @property
@@ -56,8 +61,11 @@ class DoubaoProvider(ImageProvider):
                 timeout=settings.IMAGE_TIMEOUT,
             )
         except Exception as exc:
-            self.logger.error("豆包 Seedream 调用失败: %s", exc)
-            raise ImageProviderException(f"豆包 Seedream 调用失败: {exc}", 502) from exc
+            status, reason = describe_http_error(exc)
+            # 401/402/403/429 快速失败，避免重试导致重复计费
+            code = status if status in (401, 402, 403, 429) else 502
+            self.logger.error("豆包 Seedream 调用失败: %s", reason)
+            raise ImageProviderException(f"豆包 Seedream 调用失败：{reason}", code) from exc
 
         return self._to_result(data, params)
 

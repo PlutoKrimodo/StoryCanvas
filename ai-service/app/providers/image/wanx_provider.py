@@ -14,7 +14,7 @@ from typing import Dict, Optional
 from ...models.schemas import ImageGenerationParams, ImageGenerationResult
 from ...utils.config import settings
 from ...utils.exceptions import ImageProviderException
-from ...utils.http_client import get_json, post_json
+from ...utils.http_client import describe_http_error, get_json, post_json
 from .base import ImageProvider
 
 # 轮询间隔与总超时（秒）
@@ -25,10 +25,15 @@ _TASK_TOTAL_TIMEOUT = 150.0
 class WanxProvider(ImageProvider):
     """通义万相实现（提交 + 轮询）。"""
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        api_base: Optional[str] = None,
+    ) -> None:
         super().__init__()
         self.api_key = api_key if api_key is not None else settings.DASHSCOPE_API_KEY
-        self.api_base = settings.DASHSCOPE_API_BASE.rstrip("/")
+        self.api_base = (api_base or settings.DASHSCOPE_API_BASE).rstrip("/")
         self.model = model or settings.WANX_IMAGE_MODEL
 
     @property
@@ -73,8 +78,10 @@ class WanxProvider(ImageProvider):
                 timeout=settings.LLM_TIMEOUT,
             )
         except Exception as exc:
-            self.logger.error("通义万相提交失败: %s", exc)
-            raise ImageProviderException(f"通义万相提交失败: {exc}", 502) from exc
+            status, reason = describe_http_error(exc)
+            code = status if status in (401, 402, 403, 429) else 502
+            self.logger.error("通义万相提交失败: %s", reason)
+            raise ImageProviderException(f"通义万相提交失败：{reason}", code) from exc
 
         task_id = (data.get("output") or {}).get("task_id")  # type: ignore[union-attr]
         if not task_id:
@@ -91,7 +98,13 @@ class WanxProvider(ImageProvider):
                     timeout=settings.LLM_TIMEOUT,
                 )
             except Exception as exc:
-                self.logger.warning("通义万相轮询失败，将重试: %s", exc)
+                status, reason = describe_http_error(exc)
+                if status in (401, 402, 403, 429):
+                    # 鉴权 / 欠费 / 限流类错误重试无意义，且会放大用户侧计费风险
+                    raise ImageProviderException(
+                        f"通义万相轮询失败：{reason}", status
+                    ) from exc
+                self.logger.warning("通义万相轮询失败，将重试: %s", reason)
                 await asyncio.sleep(_POLL_INTERVAL)
                 continue
 

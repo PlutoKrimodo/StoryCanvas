@@ -15,6 +15,31 @@ from .logger import get_logger
 logger = get_logger(__name__)
 
 
+def describe_http_error(exc: Exception) -> tuple[int | None, str]:
+    """把 httpx 异常归一为（上游状态码, 可读中文原因）。
+
+    不拼接响应体 / 请求头，避免厂商回显请求内容时把 API Key 带进日志或前端。
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        hints = {
+            400: "请求参数不被厂商接受",
+            401: "API Key 无效或未授权",
+            402: "账户余额不足",
+            403: "API Key 无权限或已被禁用",
+            404: "接口地址或模型不存在",
+            429: "请求过于频繁或额度已用尽",
+        }
+        if status >= 500:
+            return status, f"厂商服务暂时不可用（HTTP {status}）"
+        return status, f"{hints.get(status, '调用失败')}（HTTP {status}）"
+    if isinstance(exc, httpx.TimeoutException):
+        return None, "调用厂商接口超时"
+    if isinstance(exc, httpx.ConnectError):
+        return None, "无法连接厂商接口（请检查 Base URL 或网络）"
+    return None, "调用厂商接口失败"
+
+
 async def post_json(
     url: str,
     *,

@@ -19,6 +19,8 @@ add_executable(storycanvas_tests
     test_password_utils.cpp
     test_jwt_utils.cpp
     test_encryption_utils.cpp
+    test_secret_box.cpp
+    test_ai_credential_rules.cpp
     test_file_utils.cpp
     test_rate_limiter.cpp
     ${UTIL_SOURCES}
