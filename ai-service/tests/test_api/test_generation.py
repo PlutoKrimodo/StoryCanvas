@@ -71,6 +71,23 @@ def test_generate_reuses_parsed_data_and_consistency(client: TestClient):
     assert resp.json()["image"]["seed"] == 42
 
 
+def test_generate_rejects_unsafe_base_url(client: TestClient):
+    """图像接口同样拒绝非公网 HTTPS 的自定义 Base URL。"""
+    resp = client.post(
+        "/api/v1/images/generate",
+        json={
+            "text": "一只小猫",
+            "llm_credential": {
+                "provider": "custom",
+                "api_key": "sk-very-secret-123456",
+                "api_base": "http://169.254.169.254/v1",
+            },
+        },
+    )
+    assert resp.status_code == 422
+    assert "不安全" in resp.json()["detail"]
+
+
 def test_generate_rejects_empty_text(client: TestClient):
     resp = client.post("/api/v1/images/generate", json={"text": ""})
     assert resp.status_code == 422

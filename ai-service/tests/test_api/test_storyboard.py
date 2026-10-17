@@ -23,6 +23,41 @@ def test_storyboard_returns_requested_panel_count(client: TestClient):
     assert body["negative_prompt"]
 
 
+def test_storyboard_accepts_byok_llm_credential(client: TestClient):
+    """BYOK 口径：分镜阶段按请求构造 Provider（mock 用于可预测行为）。"""
+    resp = client.post(
+        "/api/v1/analysis/storyboard",
+        json={
+            "text": "小女孩在雨后的森林里发现一只受伤的小鸟。",
+            "image_count": 1,
+            "llm_credential": {
+                "provider": "mock",
+                "api_key": "sk-very-secret-123456",
+            },
+        },
+    )
+    assert resp.status_code == 200
+    assert len(resp.json()["panels"]) == 1
+
+
+def test_storyboard_rejects_unsafe_llm_base(client: TestClient):
+    """分镜与出图同一套 SSRF 规则：自定义 Base URL 必须是公网 HTTPS。"""
+    resp = client.post(
+        "/api/v1/analysis/storyboard",
+        json={
+            "text": "一只小猫",
+            "image_count": 1,
+            "llm_credential": {
+                "provider": "custom",
+                "api_key": "sk-very-secret-123456",
+                "api_base": "http://127.0.0.1:8080/v1",
+            },
+        },
+    )
+    assert resp.status_code == 422
+    assert "不安全" in resp.json()["detail"]
+
+
 def test_storyboard_enforces_internal_key(client: TestClient, monkeypatch):
     monkeypatch.setattr(config_module.settings, "INTERNAL_API_KEY", "secret-key")
 

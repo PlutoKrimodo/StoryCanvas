@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Dict, Optional, Type
+import asyncio
 
 from fastapi import Header, HTTPException
 
@@ -27,6 +28,7 @@ from ...services.image_generator import ImageGeneratorService
 from ...services.prompt_optimizer import PromptOptimizerService
 from ...services.text_analyzer import TextAnalyzerService
 from ...utils.config import settings
+from ...utils.url_safety import UnsafeUrlError, validate_public_https_url
 
 _LLM_PROVIDERS: Dict[str, Type[LLMProvider]] = {
     "deepseek": DeepSeekProvider,
@@ -115,6 +117,28 @@ def build_storyboard_service(credential: Optional[LLMCredential]) -> StoryboardS
     """分镜与出图使用同一套 BYOK 口径：有用户凭据就按请求构造 Provider。"""
     provider = build_llm_provider(credential) if credential is not None else get_llm_provider()
     return StoryboardService(provider)
+
+
+async def ensure_credential_base_safe(request) -> None:
+    """用户自定义 Base URL 必须先通过 SSRF 校验（DNS 解析放到线程池）。
+
+    分镜（仅 LLM 凭据）与图像生成（LLM + 图像凭据）共用同一套规则。
+    """
+    bases = []
+    llm_credential = getattr(request, "llm_credential", None)
+    image_credential = getattr(request, "image_credential", None)
+    if llm_credential is not None and llm_credential.api_base:
+        bases.append(llm_credential.api_base)
+    if image_credential is not None and image_credential.api_base:
+        bases.append(image_credential.api_base)
+
+    for base in bases:
+        try:
+            await asyncio.to_thread(validate_public_https_url, base)
+        except UnsafeUrlError as exc:
+            raise HTTPException(
+                status_code=422, detail=f"自定义 Base URL 不安全：{exc}"
+            ) from exc
 
 
 def build_generation_service(request: ImageGenerateRequest) -> GenerationService:
