@@ -4,6 +4,7 @@ import { conversationsApi } from '../api/conversations'
 import type {
   BatchView,
   ChatMessage,
+  ConversationDetail,
   ConversationSummary,
   PlanResponse,
   StoryboardPanel,
@@ -35,6 +36,35 @@ function toMessage(raw: {
   }
 }
 
+/**
+ * 会话内存缓存。
+ *
+ * Home 在路由切换（例如去「我的绘本」再返回）时会被卸载，组件内的 useState
+ * 随之丢失。把最近一次会话镜像到模块级变量，可在同一次 SPA 会话内无缝恢复；
+ * 整页刷新时再由服务端历史兜底。
+ */
+interface ChatSessionCache {
+  conversationId: string | null
+  messages: ChatMessage[]
+  batch: BatchView | null
+}
+
+let sessionCache: ChatSessionCache = {
+  conversationId: null,
+  messages: [],
+  batch: null,
+}
+
+/** 是否存在可恢复的会话（供页面决定首屏是否直接进入工作室） */
+export function hasCachedChatSession(): boolean {
+  return sessionCache.messages.length > 0
+}
+
+/** 清空会话缓存（登出 / 切换身份时调用，避免不同账号串数据） */
+export function clearChatSessionCache(): void {
+  sessionCache = { conversationId: null, messages: [], batch: null }
+}
+
 export interface SendPlanOptions {
   text: string
   imageCount: number
@@ -50,13 +80,19 @@ export interface SendPlanOptions {
  * 游客不调用会话接口，消息只保存在本 Hook 的内存中。
  */
 export function useChatGeneration() {
-  const [conversationId, setConversationId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [batch, setBatch] = useState<BatchView | null>(null)
+  // 从模块缓存初始化：路由切走再回来（同一次 SPA）时无需重新拉取即可恢复
+  const [conversationId, setConversationId] = useState<string | null>(sessionCache.conversationId)
+  const [messages, setMessages] = useState<ChatMessage[]>(sessionCache.messages)
+  const [batch, setBatch] = useState<BatchView | null>(sessionCache.batch)
   const [polling, setPolling] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+
+  // 把最新会话镜像到模块缓存，页面卸载后仍可恢复
+  useEffect(() => {
+    sessionCache = { conversationId, messages, batch }
+  }, [conversationId, messages, batch])
 
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollBatchId = useRef<string | null>(null)
@@ -124,6 +160,16 @@ export function useChatGeneration() {
     [pollOnce, stopPolling],
   )
 
+  // 路由切回时若缓存中的批次仍在生成，恢复轮询
+  useEffect(() => {
+    const cached = sessionCache.batch
+    if (cached && (cached.status === 'pending' || cached.status === 'processing')) {
+      startPolling(cached.batch_id)
+    }
+    // 只在首次挂载时尝试恢复
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => stopPolling, [stopPolling])
 
   const loadConversations = useCallback(async () => {
@@ -166,7 +212,7 @@ export function useChatGeneration() {
             }
           }
         }
-        return detail.conversation
+        return detail
       } catch (error) {
         console.error('加载会话失败', error)
         return undefined
@@ -177,6 +223,7 @@ export function useChatGeneration() {
 
   const newConversation = useCallback(() => {
     stopPolling()
+    clearChatSessionCache()
     setConversationId(null)
     setMessages([])
     setBatch(null)

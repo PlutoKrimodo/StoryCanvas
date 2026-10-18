@@ -40,18 +40,25 @@ class StoryboardPrompt:
             '    "palette": "整组图的色彩倾向",\n'
             '    "notes": "画风与镜头连续性要求"\n'
             "  }},\n"
-            '  "panels": [{{"index": 0, "text": "第 1 格画面描述"}}],\n'
-            '  "negative_prompt": "不希望出现的元素"\n'
+            '  "panels": [{{"index": 0, "text": "小女孩蹲在雨后的森林里，双手捧着一只受伤的小鸟"}}],\n'
+            '  "negative_prompt": "不希望出现的元素（如分屏、多格、拼图）"\n'
             "}}\n"
             "硬性要求：\n"
             "- panels 必须恰好 {count} 个，index 从 0 连续递增；\n"
             "- 每格 text 是可直接绘制的画面描述（主体 + 动作 + 场景），不要写“同上”；\n"
+            "- 每格 text 只描述这一格的单一连续画面，禁止出现「第X格」「分镜」「漫画」「多格」「拼图」「画格」「storyboard」「panel」「comic」等字样，也不要提及其它格；\n"
+            "- 每格是一个完整构图，不是分屏；不要描述拼图、多画面或多视角；\n"
+            "- 组级说明（如「整组统一为油画」「所有画面保持…」）必须写进 consistency.notes，不得写进 panels[].text；\n"
             "- 角色外观必须在 consistency.characters 中固定写明，供每格复用；\n"
             "- 风格为 {style}，所有画面保持同一画风；\n"
             "- 故事较短时补充合理细节，但不得改变原意。"
         ).format(count=image_count, style=style_value)
 
-        user = f"故事原文：\n{text}\n\n请拆成 {image_count} 格，输出 JSON。"
+        user = (
+            f"故事原文：\n{text}\n\n"
+            f"请拆成 {image_count} 格，输出 JSON。"
+            "每格 text 不要带格号，直接写画面内容。"
+        )
 
         return [
             {"role": "system", "content": system},

@@ -38,13 +38,18 @@ function statusTag(overview: AiCredentialOverview) {
   return <Tag>可选</Tag>
 }
 
+interface AiCredentialCardProps {
+  /** 保存或移除成功后通知外部（用于刷新模型来源与自定义张数能力） */
+  onChanged?: () => void
+}
+
 /**
- * 个人中心「我的 AI API Key」配置卡片。
+ * 「我的 AI API Key」配置卡片。
  *
  * 接入路径刻意压到三步：选厂商 → 粘贴 Key → 保存并验证。
  * Base URL 与模型由后端目录自动带出，仅高级设置才需要改动。
  */
-function AiCredentialCard() {
+function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
   const { message } = App.useApp()
   const [overview, setOverview] = useState<AiCredentialOverview | null>(null)
   const [catalog, setCatalog] = useState<CredentialCatalog | null>(null)
@@ -164,6 +169,7 @@ function AiCredentialCard() {
       setEditing((prev) => ({ ...prev, [active]: false }))
       resetFeedback()
       await load()
+      onChanged?.()
     } catch (error) {
       console.error('保存 API Key 失败', error)
       setFormError(error instanceof Error ? error.message : '保存失败，请稍后重试')
@@ -211,6 +217,7 @@ function AiCredentialCard() {
       await aiCredentialsApi.remove(active)
       message.success('已移除该 API Key，后续将使用系统默认配置')
       await load()
+      onChanged?.()
     } catch (error) {
       console.error('移除 API Key 失败', error)
       setFormError('移除失败，请稍后重试')

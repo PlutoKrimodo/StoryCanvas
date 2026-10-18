@@ -172,7 +172,7 @@ function BookDetail() {
           <Button
             type="primary"
             icon={<RocketOutlined />}
-            onClick={() => navigate(`/generate?bookId=${current.id}`)}
+            onClick={() => navigate(`/?bookId=${current.id}`)}
           >
             为该绘本生成插画
           </Button>

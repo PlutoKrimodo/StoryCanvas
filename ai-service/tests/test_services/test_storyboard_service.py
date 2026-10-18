@@ -66,6 +66,57 @@ async def test_invalid_json_falls_back_to_deterministic_split():
 
 
 @pytest.mark.asyncio
+async def test_panel_text_with_index_prefix_is_sanitized():
+    payload = {
+        "panels": [
+            {"index": 0, "text": "第 2 格：小女孩坐在旧木船上，手捧白色野花"},
+        ],
+        "parsed_data": {"characters": [{"name": "小女孩"}], "scene": {}},
+    }
+    service = StoryboardService(FakeProvider(json.dumps(payload, ensure_ascii=False)))
+
+    result = await service.generate("故事原文", 1, ArtStyle.OIL_PAINTING)
+
+    assert result.panels[0].text == "小女孩坐在旧木船上，手捧白色野花"
+
+
+@pytest.mark.asyncio
+async def test_group_level_notes_removed_from_panel_text():
+    payload = {
+        "panels": [
+            {
+                "index": 0,
+                "text": "小女孩坐在旧木船上，手捧白色野花。整组统一为印象派油画，短促笔触。",
+            },
+        ],
+        "parsed_data": {"characters": [{"name": "小女孩"}], "scene": {}},
+    }
+    service = StoryboardService(FakeProvider(json.dumps(payload, ensure_ascii=False)))
+
+    result = await service.generate("故事原文", 1, ArtStyle.OIL_PAINTING)
+
+    assert "整组统一" not in result.panels[0].text
+    assert "小女孩坐在旧木船上" in result.panels[0].text
+
+
+@pytest.mark.asyncio
+async def test_consistency_prompt_is_single_illustration():
+    payload = {
+        "panels": [{"index": 0, "text": "小女孩坐在旧木船上"}],
+        "parsed_data": {"characters": [{"name": "小女孩"}], "scene": {}},
+        "consistency": {"characters": [{"name": "小女孩", "appearance": "草帽、白裙"}]},
+    }
+    service = StoryboardService(FakeProvider(json.dumps(payload, ensure_ascii=False)))
+
+    result = await service.generate("故事原文", 1, ArtStyle.OIL_PAINTING)
+
+    assert "same character design" in result.consistency_prompt
+    assert "single illustration" in result.consistency_prompt
+    assert "across all panels" not in result.consistency_prompt
+    assert "no split screen" in result.consistency_prompt
+
+
+@pytest.mark.asyncio
 async def test_panel_count_mismatch_is_padded_or_truncated():
     payload = {
         "panels": [{"index": 0, "text": "只有一格"}],

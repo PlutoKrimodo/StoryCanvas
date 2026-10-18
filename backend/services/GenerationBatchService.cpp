@@ -63,23 +63,28 @@ int randomSeed() {
 ServiceResult GenerationBatchService::createPlan(const std::string &userId,
                                                  bool isGuest,
                                                  const CreatePlanRequest &req) {
+    // 先读取 BYOK 状态：双项都由用户自带 Key 承担时，张数上限可放宽到 12
+    bool byokLlm = false;
+    bool byokImage = false;
+    if (!isGuest) {
+        if (!UserAiCredentialService::loadConfigured(userId, byokLlm, byokImage)) {
+            return fail(500, "读取 API Key 配置失败，请稍后重试");
+        }
+    }
+
     const int imageCount = isGuest ? 1 : req.imageCount;
-    if (imageCount < 1 || imageCount > 6) {
-        return fail(422, "生成张数需在 1–6 之间");
+    // 双项自定义模型时花费全部由用户承担，允许自定义张数；其余情况仍限制 1–6，
+    // 避免系统 Key 被批量消耗。
+    const int maxCount = (byokLlm && byokImage) ? 12 : 6;
+    if (imageCount < 1 || imageCount > maxCount) {
+        return fail(422, maxCount == 12 ? "生成张数需在 1–12 之间"
+                                        : "生成张数需在 1–6 之间");
     }
     if (isGuest) {
         // 游客的分镜本身也消耗系统 LLM：先检查 1 张额度，避免只出分镜不出图的白嫖路径
         ServiceResult quota;
         if (!GenerationService::checkImageQuota(userId, true, 1, false, false, quota)) {
             return quota;
-        }
-    }
-
-    bool byokLlm = false;
-    bool byokImage = false;
-    if (!isGuest) {
-        if (!UserAiCredentialService::loadConfigured(userId, byokLlm, byokImage)) {
-            return fail(500, "读取 API Key 配置失败，请稍后重试");
         }
     }
 

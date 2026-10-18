@@ -6,7 +6,7 @@
 
 namespace {
 
-constexpr int kMaxPanels = 6;
+constexpr int kMaxPanels = 12;
 constexpr int kMaxTextLength = 2000;
 
 const std::set<std::string> kStyles = {
@@ -71,7 +71,7 @@ std::vector<FieldError> CreatePlanRequest::getErrors() const {
         errors.push_back({"text", "故事描述不能超过 2000 个字符"});
     }
     if (imageCount < 1 || imageCount > kMaxPanels) {
-        errors.push_back({"image_count", "生成张数需在 1–6 之间"});
+        errors.push_back({"image_count", "生成张数需在 1–12 之间"});
     }
     if (!validStyle(style)) {
         errors.push_back({"style", "不支持的艺术风格"});
@@ -106,7 +106,7 @@ bool UpdatePlanRequest::validate() const {
 std::vector<FieldError> UpdatePlanRequest::getErrors() const {
     std::vector<FieldError> errors;
     if (panels.empty() || panels.size() > kMaxPanels) {
-        errors.push_back({"panels", "分镜数量需在 1–6 之间"});
+        errors.push_back({"panels", "分镜数量需在 1–12 之间"});
         return errors;
     }
     for (size_t i = 0; i < panels.size(); ++i) {

@@ -1,12 +1,15 @@
+import { useState } from 'react'
 import { Alert, Button, Empty, Space, Spin, Tag, Typography } from 'antd'
 import {
   DownloadOutlined,
+  PlusOutlined,
   ReloadOutlined,
   SaveOutlined,
   StopOutlined,
 } from '@ant-design/icons'
 
 import ArtImage from '../common/ArtImage'
+import ImageLightbox from './ImageLightbox'
 import type { BatchItem } from '../../types/conversation'
 
 const { Text } = Typography
@@ -37,8 +40,12 @@ function ImageGridMessage({
   onRegenerate,
   onCancel,
 }: ImageGridMessageProps) {
+  const [preview, setPreview] = useState<{ src: string; alt: string } | null>(null)
+
   const completed = items.filter((item) => item.status === 'completed' && item.image_id)
   const active = ACTIVE.has(status ?? '')
+
+  const openPreview = (src: string, alt: string) => setPreview({ src, alt })
 
   if (!items.length) {
     return (
@@ -76,16 +83,24 @@ function ImageGridMessage({
         {items.map((item) => {
           const index = item.panel_index ?? 0
           const running = item.status === 'pending' || item.status === 'processing'
+          const hasImage = Boolean(item.image_url && item.image_id)
+          const alt = `第 ${index + 1} 格`
+
           return (
             <div
               key={`${item.task_id}-${index}`}
               className="overflow-hidden rounded-chip border border-hairline bg-paper"
             >
-              <div className="relative min-h-[180px]">
-                {item.image_url && item.image_id ? (
+              <div
+                className={`relative min-h-[180px] ${hasImage ? 'cursor-zoom-in' : ''}`}
+                onDoubleClick={() => {
+                  if (hasImage && item.image_url) openPreview(item.image_url, alt)
+                }}
+              >
+                {hasImage && item.image_url ? (
                   <ArtImage
                     src={item.image_url}
-                    alt={`第 ${index + 1} 格`}
+                    alt={alt}
                     wrapperClassName="rounded-none"
                     maxHeight={320}
                   />
@@ -103,9 +118,25 @@ function ImageGridMessage({
                     )}
                   </div>
                 )}
+
                 <Tag className="!absolute left-2 top-2" color="processing">
                   第 {index + 1} 格
                 </Tag>
+
+                {hasImage && item.image_url ? (
+                  <button
+                    type="button"
+                    aria-label="放大查看"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (item.image_url) openPreview(item.image_url, alt)
+                    }}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-paper/90 text-ink shadow-card ring-1 ring-hairline transition-transform duration-200 hover:scale-110 hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-clay"
+                  >
+                    <PlusOutlined />
+                  </button>
+                ) : null}
               </div>
 
               <div className="p-2">
@@ -149,6 +180,13 @@ function ImageGridMessage({
           )
         })}
       </div>
+
+      <ImageLightbox
+        open={Boolean(preview)}
+        src={preview?.src ?? ''}
+        alt={preview?.alt}
+        onClose={() => setPreview(null)}
+      />
     </div>
   )
 }

@@ -22,6 +22,7 @@ from ..utils.storage import build_image_rel_path, guess_extension, new_image_id,
 from .base import BaseService
 from .image_generator import ImageGeneratorService
 from .prompt_optimizer import PromptOptimizerService
+from .storyboard_service import sanitize_panel_text
 from .text_analyzer import TextAnalyzerService
 
 # 尺寸合法区间（防止恶意/异常参数拖垮生成）
@@ -107,23 +108,41 @@ class GenerationService(BaseService):
 
         # 2. Prompt 优化
         style = request.style
-        prompt = self.optimizer.optimize(parsed_data, style, request.parameters)
-        if request.parsed_data is not None and request.text.strip():
-            # 共享解析只描述整体故事；每格仍需注入自己的画面描述
-            prompt = f"{prompt}, scene: {request.text.strip()[:500]}"
+        # 防御性清洗：上游漏掉的“第X格/整组统一…”在这里再处理一次
+        panel_text = sanitize_panel_text(request.text)
+        if request.parsed_data is not None:
+            # 批次单格：只使用当前格文本 + 角色外观，避免整段故事污染单格
+            prompt = self.optimizer.optimize_panel(
+                panel_text, parsed_data, style, request.parameters
+            )
+        else:
+            prompt = self.optimizer.optimize(parsed_data, style, request.parameters)
+            if panel_text.strip():
+                prompt = f"{prompt}, scene: {panel_text.strip()[:500]}"
+
+        width, height = self._resolve_size(request.parameters)
+        # 宽幅更容易被理解为拼图/多格，补一个正向提示（不强制改用户尺寸）
+        if width > height:
+            prompt = f"wide landscape single scene, {prompt}"
         if request.consistency_prompt:
             prompt = f"{request.consistency_prompt}\n{prompt}"
 
-        negative = self.optimizer.negative(style)
-        if request.negative_prompt_extra:
-            negative = (
-                f"{negative}, {request.negative_prompt_extra}"
-                if negative
-                else request.negative_prompt_extra
-            )
+        # 3. 负向 Prompt：风格负向 + 防分屏/多格 + 用户/分镜附加（去重）
+        seen_negative = set()
+        negative_items = []
+        for item in (
+            self.optimizer.negative(style),
+            self.optimizer.anti_panel_negative(),
+            request.negative_prompt_extra or "",
+        ):
+            for chunk in str(item).split(","):
+                value = chunk.strip()
+                if value and value.lower() not in seen_negative:
+                    seen_negative.add(value.lower())
+                    negative_items.append(value)
+        negative = ", ".join(negative_items)
 
-        # 3. 图像生成
-        width, height = self._resolve_size(request.parameters)
+        # 4. 图像生成
         seed = request.parameters.get("seed")
         params = ImageGenerationParams(
             prompt=prompt,

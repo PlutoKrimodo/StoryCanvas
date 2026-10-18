@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { authApi } from '../api/auth'
 import { useAuthStore } from '../stores/authStore'
 import type { LoginRequest, RegisterRequest } from '../types/auth'
+import { clearChatSessionCache } from './useChatGeneration'
 
 export function useAuth() {
   const navigate = useNavigate()
@@ -54,6 +55,8 @@ export function useAuth() {
     } catch {
       // 退出接口失败也要清理本地状态
     }
+    // 清空会话缓存，避免下一个账号看到上一个账号的对话
+    clearChatSessionCache()
     logout()
     navigate('/login', { replace: true })
   }, [logout, navigate])

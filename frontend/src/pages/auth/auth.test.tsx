@@ -44,7 +44,6 @@ describe('认证页与个人中心接入新体系（docs/17 Step 8）', () => {
     useAuthStore.setState(signedIn)
     const { container } = renderWithTheme(<Profile />, { at: '/profile' })
     expect(screen.getByRole('heading', { name: '个人中心' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '我的绘本' })).toBeInTheDocument()
     expect(screen.getByText('painter@example.com')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /退出登录/ })).toBeInTheDocument()
     expect(container.querySelector('.bg-gray-50')).toBeNull()

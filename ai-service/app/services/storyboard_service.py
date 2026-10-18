@@ -28,6 +28,58 @@ from .text_analyzer import TextAnalyzerService
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 _FAST_FAIL_CODES = (401, 402, 403, 429)
 
+# 单格文本清洗：格号前缀、句中格号、组级说明、多格触发词
+_PANEL_PREFIX_RE = re.compile(
+    r"^\s*(?:第\s*[0-9一二三四五六七八九十]+\s*[格幅张画面]*|panel\s*\d+|画面\s*\d+)"
+    r"\s*[：:、.．]\s*",
+    re.IGNORECASE,
+)
+_PANEL_MARK_RE = re.compile(
+    r"(?:第\s*[0-9一二三四五六七八九十]+\s*[格幅张画面]|panel\s*\d+)",
+    re.IGNORECASE,
+)
+_GROUP_LEVEL_RE = re.compile(
+    r"(整组统一|所有画面|每一格|全部画面|保持同一画风|组图|连环画)", re.IGNORECASE
+)
+_MULTI_PANEL_WORD_RE = re.compile(
+    r"(storyboard|comic|multi-?panel|split[\s-]?screen|collage|grid)", re.IGNORECASE
+)
+_SENTENCE_SPLIT_RE = re.compile(r"[。；;！？!?\n]+")
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def sanitize_panel_text(text: str) -> str:
+    """清洗单格描述，去掉格号、组级说明与多格触发词。
+
+    保守策略：清洗后为空或异常变短时回退原文，避免误删正常画面描述。
+    返回长度上限 500，与 ``StoryboardPanel.text`` 保持一致。
+    """
+    original = (text or "").strip()
+    if not original:
+        return original
+
+    cleaned = _PANEL_PREFIX_RE.sub("", original)
+    cleaned = _PANEL_MARK_RE.sub("", cleaned)
+    cleaned = _MULTI_PANEL_WORD_RE.sub("", cleaned)
+
+    # 组级说明（“整组统一/所有画面/每一格…”）不属于单格画面，按句过滤
+    sentences = [item.strip() for item in _SENTENCE_SPLIT_RE.split(cleaned) if item.strip()]
+    kept = [item for item in sentences if not _GROUP_LEVEL_RE.search(item)]
+    if kept:
+        cleaned = "。".join(kept)
+    else:
+        cleaned = "。"
+
+    cleaned = _WHITESPACE_RE.sub(" ", cleaned).strip(" ，,、。；;")
+    cleaned = re.sub(r"[。；;]{2,}", "。", cleaned)
+
+    if not cleaned:
+        return original
+    # 清洗后异常变短（超过 80% 内容被移除）时回退，避免误删正常画面描述
+    if len(original) >= 20 and len(cleaned) < len(original) * 0.2:
+        return original
+    return cleaned[:500]
+
 
 class StoryboardService(BaseService):
     """把故事拆成 N 格，并给出整组共享的一致性设定。"""
@@ -48,8 +100,10 @@ class StoryboardService(BaseService):
         data: Dict[str, Any] = {}
 
         try:
+            # 张数越多，JSON 输出越长；按格数放大 token 预算，避免 12 格时被截断
+            max_tokens = min(4096, max(1600, image_count * 220))
             raw = await self.llm_provider.generate(
-                messages, temperature=0.4, max_tokens=1600, json_mode=True
+                messages, temperature=0.4, max_tokens=max_tokens, json_mode=True
             )
             parsed = self._extract_json(raw)
             if isinstance(parsed, dict):
@@ -123,6 +177,8 @@ class StoryboardService(BaseService):
         while len(texts) < image_count:
             texts.append(fallback[len(texts) % len(fallback)])
         texts = texts[:image_count]
+        # LLM 与确定性兜底都可能带“第 X 格”或组级说明，统一清洗
+        texts = [sanitize_panel_text(value) for value in texts]
 
         return [
             StoryboardPanel(index=index, text=value)
@@ -181,7 +237,10 @@ class StoryboardService(BaseService):
 
     @staticmethod
     def _build_consistency_prompt(consistency: StoryboardConsistency) -> str:
-        parts = ["Keep the same character design, clothing and art style across all panels."]
+        parts = [
+            "Keep the same character design, clothing and art style in this single illustration.",
+            "One continuous scene, full-bleed, no panels, no split screen, no collage, no grid.",
+        ]
         for character in consistency.characters:
             if character.appearance:
                 parts.append(f"{character.name}: {character.appearance}")

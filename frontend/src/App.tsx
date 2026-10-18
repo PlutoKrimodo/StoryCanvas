@@ -1,16 +1,21 @@
 import { useEffect, type ReactNode } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import ErrorBoundary from './components/common/ErrorBoundary'
 import { ensureGuestToken } from './api/client'
 import BookDetail from './pages/books/BookDetail'
 import BookList from './pages/books/BookList'
-import Generate from './pages/generation/Generate'
 import Home from './pages/home/Home'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import Profile from './pages/profile/Profile'
 import { useAuthStore } from './stores/authStore'
+
+/** /generate 重定向到统一首页 /，并保留 ?bookId= 等查询参数 */
+function RedirectToHome() {
+  const location = useLocation()
+  return <Navigate to={{ pathname: '/', search: location.search }} replace />
+}
 
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -35,9 +40,9 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          {/* Guest-first：首页与生成页对游客开放（先体验后注册） */}
+          {/* 统一搜索式体验：首页与 AI 生成对话互通，/generate 重定向回 / */}
           <Route path="/" element={<Home />} />
-          <Route path="/generate" element={<Generate />} />
+          <Route path="/generate" element={<RedirectToHome />} />
 
           {/* 受保护路由 */}
           <Route

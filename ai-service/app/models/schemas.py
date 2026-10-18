@@ -149,7 +149,7 @@ class StoryboardPanel(BaseModel):
 
 class StoryboardRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=2000)
-    image_count: int = Field(1, ge=1, le=6)
+    image_count: int = Field(1, ge=1, le=12)
     style: ArtStyle = ArtStyle.CARTOON
     llm_credential: Optional[LLMCredential] = None
 

@@ -17,7 +17,7 @@ TEST(ConversationDtoTest, AcceptsValidPlanRequest) {
 
 TEST(ConversationDtoTest, RejectsInvalidCountOrStyle) {
     auto countTooLarge = CreatePlanRequest::fromJson({
-        {"text", "故事"}, {"image_count", 7}, {"style", "watercolor"}, {"size", "1024x1024"},
+        {"text", "故事"}, {"image_count", 13}, {"style", "watercolor"}, {"size", "1024x1024"},
     });
     EXPECT_FALSE(countTooLarge.validate());
 

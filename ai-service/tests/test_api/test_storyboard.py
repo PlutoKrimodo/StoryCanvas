@@ -23,6 +23,25 @@ def test_storyboard_returns_requested_panel_count(client: TestClient):
     assert body["negative_prompt"]
 
 
+def test_storyboard_api_strips_panel_labels(client: TestClient):
+    """用户手写“第一格/第二格”时，返回的单格文本不应携带格号。"""
+    text = (
+        "第一格：河湾全景，远处石拱桥。"
+        "第二格：小女孩坐在旧木船上，手捧白色野花。"
+        "第三格：水面特写，金绿色光斑。"
+        "第四格：石桥与桥上人影。"
+    )
+    resp = client.post(
+        "/api/v1/analysis/storyboard",
+        json={"text": text, "image_count": 4, "style": "oil_painting"},
+    )
+    assert resp.status_code == 200
+    panels = resp.json()["panels"]
+    assert len(panels) == 4
+    assert all("第" not in item["text"] for item in panels)
+    assert all("整组统一" not in item["text"] for item in panels)
+
+
 def test_storyboard_accepts_byok_llm_credential(client: TestClient):
     """BYOK 口径：分镜阶段按请求构造 Provider（mock 用于可预测行为）。"""
     resp = client.post(

@@ -44,16 +44,17 @@ describe('共享布局（docs/17 §3.1）', () => {
     expect(screen.queryByRole('button', { name: '导航' })).not.toBeInTheDocument()
   })
 
-  it('app：游客见登录/注册且无「我的绘本」，登录后补齐导航与账户菜单', () => {
-    const { unmount } = tree(<AppLayout variant="app">page</AppLayout>, '/generate')
-    expect(screen.getByRole('link', { name: 'AI 生成' })).toBeInTheDocument()
+  it('app：游客见登录/注册，登录后出账户菜单', () => {
+    const { unmount } = tree(<AppLayout variant="app">page</AppLayout>, '/')
+    expect(screen.getByRole('button', { name: /登\s*录/ })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '我的绘本' })).not.toBeInTheDocument()
     unmount()
 
     useAuthStore.setState(signedIn)
     tree(<AppLayout variant="app">page</AppLayout>, '/books')
-    expect(screen.getByRole('link', { name: '我的绘本' })).toBeInTheDocument()
     expect(screen.getByText('绘本画家')).toBeInTheDocument()
+    // 「我的绘本」已迁入创作对话框，顶栏不再有页面跳转项
+    expect(screen.queryByRole('link', { name: '我的绘本' })).not.toBeInTheDocument()
   })
 
   it('auth：登录页出品牌与返回首页链接', () => {

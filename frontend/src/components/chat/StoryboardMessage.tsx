@@ -45,7 +45,7 @@ function StoryboardMessage({
         <div>
           <Text strong>{message.content || '分镜提案'}</Text>
           <Paragraph type="secondary" className="!mb-0 mt-1 text-xs">
-            确认每格描述后开始绘制；确认前不会产生图像费用。
+            确认每格描述后开始绘制；每格生成一幅完整连续画面，不会分屏；确认前不会产生图像费用。
           </Paragraph>
         </div>
         {characters.length ? (

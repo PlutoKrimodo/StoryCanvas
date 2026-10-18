@@ -43,3 +43,40 @@ def test_additional_keywords_appended():
         _sample(), ArtStyle.CARTOON, {"extra_keywords": "golden hour lighting"}
     )
     assert "golden hour lighting" in prompt
+
+
+def test_optimize_panel_is_single_scene():
+    service = PromptOptimizerService()
+    parsed = ParsedData(
+        characters=[ParsedCharacter(name="小女孩", appearance="草帽、白裙")],
+        scene=ParsedScene(location="森林", mood="温馨"),
+        objects=["小鸟"],
+        actions=["发现"],
+        emotions=["好奇"],
+    )
+
+    prompt = service.optimize_panel(
+        "小女孩坐在旧木船上，手捧白色野花",
+        parsed,
+        ArtStyle.OIL_PAINTING,
+    )
+
+    # 单图约束与当前格场景
+    assert "single continuous illustration" in prompt
+    assert "no split screen" in prompt
+    assert "小女孩坐在旧木船上" in prompt
+    # 角色外观仍保留，用于跨图一致性
+    assert "草帽、白裙" in prompt
+    # 整段故事的场景 / 物品 / 动作不得混入单格
+    assert "森林" not in prompt
+    assert "小鸟" not in prompt
+    assert "发现" not in prompt
+
+
+def test_anti_panel_negative_contains_split_screen():
+    service = PromptOptimizerService()
+    negative = service.anti_panel_negative()
+
+    assert "split screen" in negative
+    assert "multiple panels" in negative
+    assert "comic strip" in negative

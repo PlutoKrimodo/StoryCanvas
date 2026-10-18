@@ -1,62 +1,95 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter, useLocation } from 'react-router-dom'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { useAuthStore } from '../../stores/authStore'
 import Home from './Home'
+import { clearChatSessionCache } from '../../hooks/useChatGeneration'
+import { renderWithTheme } from '../../test/renderWithTheme'
+import { useAuthStore } from '../../stores/authStore'
 
-// ResizeObserver / matchMedia 的 jsdom 兜底见 src/test/setup.ts
+vi.mock('../../api/conversations', () => ({
+  conversationsApi: {
+    list: () => Promise.resolve({ data: { data: { items: [], total: 0 } } }),
+    get: () => Promise.resolve({ data: { data: null } }),
+    getBatch: () => Promise.resolve({ data: { data: null } }),
+    createPlan: () => Promise.resolve({ data: { data: null } }),
+    updatePlan: () => Promise.resolve({ data: { data: null } }),
+    startBatch: () => Promise.resolve({ data: { data: null } }),
+    cancelBatch: () => Promise.resolve({ data: { data: null } }),
+    regeneratePanel: () => Promise.resolve({ data: { data: null } }),
+    remove: () => Promise.resolve({ data: { data: null } }),
+  },
+}))
 
-function LocationProbe() {
-  const location = useLocation()
-  return <div data-testid="path">{location.pathname}</div>
+vi.mock('../../api/aiCredentials', () => ({
+  aiCredentialsApi: {
+    getOverview: () =>
+      Promise.resolve({
+        data: {
+          data: {
+            byok_enabled: true,
+            encryption_ready: true,
+            quota_exempt: false,
+            credentials: { llm: null, image: null },
+          },
+        },
+      }),
+    getProviders: () => Promise.resolve({ data: { data: null } }),
+    save: () => Promise.resolve({ data: { data: null } }),
+    remove: () => Promise.resolve({ data: { data: null } }),
+    test: () => Promise.resolve({ data: { data: null } }),
+  },
+}))
+
+const signedIn = {
+  isAuthenticated: true,
+  user: { id: 'u1', username: '绘本画家', email: 'painter@example.com' },
 }
 
-const renderHome = () =>
-  render(
-    <MemoryRouter initialEntries={['/']}>
-      <Home />
-      <LocationProbe />
-    </MemoryRouter>,
-  )
-
-describe('Home 双形态', () => {
+describe('统一体验首页', () => {
   afterEach(() => {
+    cleanup()
+    clearChatSessionCache()
     useAuthStore.setState({ isAuthenticated: false, user: null })
   })
 
-  it('游客：hero 居中 + 开始创作入口 + 额度小字', () => {
-    renderHome()
-    expect(screen.getByRole('img', { name: 'StoryCanvas' })).toBeInTheDocument()
-    expect(screen.getByText('把一段故事，画成一幅绘本插画')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /开始创作/ })).toBeInTheDocument()
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
-    expect(screen.getByText(/无需注册/)).toBeInTheDocument()
-    // hero 形态不出顶栏导航
-    expect(screen.queryByRole('link', { name: 'AI 生成' })).not.toBeInTheDocument()
+  it('游客：只保留大 LOGO + 对话框，旧 hero 文案与入口已移除', () => {
+    renderWithTheme(<Home />)
 
-    fireEvent.click(screen.getByRole('button', { name: /开始创作/ }))
-    expect(screen.getByTestId('path')).toHaveTextContent('/generate')
+    expect(screen.getByRole('img', { name: 'StoryCanvas' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '发送' })).toBeDisabled()
+
+    // 旧首页元素与登录用户专属入口全部移除
+    expect(screen.queryByText('把一段故事，画成一幅绘本插画')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /开始创作/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(/无需注册/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'AI 生成' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '绘本' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '模型管理' })).not.toBeInTheDocument()
   })
 
-  it('已登录：4 条入口跳转（CTA + 三个 tile）全部可达', () => {
-    useAuthStore.setState({
-      isAuthenticated: true,
-      user: { id: 'u1', username: '绘本画家', email: 'painter@example.com' },
-    })
-    renderHome()
-    expect(screen.getByText('绘本画家，欢迎回来')).toBeInTheDocument()
+  it('点击对话框后参数行被唤醒', () => {
+    renderWithTheme(<Home />)
 
-    const targets = [
-      [/开始创作/, '/generate'],
-      [/我的绘本/, '/books'],
-      [/个人中心/, '/profile'],
-      [/导出 PDF/, '/books'],
-    ] as const
+    fireEvent.focus(screen.getByRole('textbox'))
+    expect(screen.getByText('卡通风格')).toBeInTheDocument()
+    expect(screen.getByText('1024 × 1024（方形·推荐）')).toBeInTheDocument()
+  })
 
-    for (const [name, expected] of targets) {
-      fireEvent.click(screen.getByRole('button', { name }))
-      expect(screen.getByTestId('path')).toHaveTextContent(expected)
-    }
+  it('已登录：对话框参数行提供「绘本」与「模型管理」入口', () => {
+    useAuthStore.setState(signedIn)
+    renderWithTheme(<Home />)
+
+    expect(screen.getByRole('img', { name: 'StoryCanvas' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+
+    fireEvent.focus(screen.getByRole('textbox'))
+    expect(screen.getByRole('button', { name: '绘本' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '模型管理' })).toBeInTheDocument()
+
+    // 旧仪表盘与顶栏导航项已被移除
+    expect(screen.queryByText('绘本画家，欢迎回来')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '我的绘本' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /开始创作/ })).not.toBeInTheDocument()
   })
 })

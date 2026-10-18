@@ -11,6 +11,19 @@ from typing import Dict, List, Optional
 
 from ..models.schemas import ParsedData
 
+# 单图正向约束：明确要求一幅连续完整画面，抵消模型对“分镜/多格”的联想
+SINGLE_IMAGE_CONSTRAINTS = (
+    "single continuous illustration, one scene, full-bleed, "
+    "no panel borders, no split screen, no collage, no grid"
+)
+
+# 防分屏/多格负向词：所有风格共用，避免散落在各风格模板中
+ANTI_PANEL_NEGATIVE = (
+    "split screen, multiple panels, comic strip, comic panels, collage, grid, "
+    "storyboard, multiple frames, white borders, letterboxing, triptych, diptych, "
+    "duplicated character, multiple views, multiple scenes"
+)
+
 
 class PromptOptimizationPrompt:
     """绘图 Prompt 构建器。"""

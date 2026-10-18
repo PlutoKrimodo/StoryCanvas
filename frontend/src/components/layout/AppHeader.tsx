@@ -1,26 +1,11 @@
-import { DownOutlined, MenuOutlined, UserOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import { DownOutlined, UserOutlined } from '@ant-design/icons'
 import { Avatar, Button, Dropdown, Space } from 'antd'
 import type { MenuProps } from 'antd'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../../hooks/useAuth'
 import Wordmark from './Wordmark'
-
-interface NavItem {
-  to: string
-  label: string
-  /** 仅登录后可见 */
-  authOnly?: boolean
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: '首页' },
-  { to: '/generate', label: 'AI 生成' },
-  { to: '/books', label: '我的绘本', authOnly: true },
-]
-
-const isActive = (pathname: string, to: string) =>
-  to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`)
 
 /** 登录/游客身份入口：顶栏右侧与 hero 右上角共用 */
 export function AccountActions({ ghost = false }: { ghost?: boolean }) {
@@ -65,47 +50,43 @@ export function AccountActions({ ghost = false }: { ghost?: boolean }) {
   )
 }
 
-function AppHeader() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const { isAuthenticated } = useAuth()
+interface AppHeaderProps {
+  /** 悬浮模式：静止完全透明，鼠标移入整条导航后变为完全不透明 */
+  transparent?: boolean
+  /** 是否显示左上角 LOGO（首页态大 LOGO 在页面中央，顶栏不显示） */
+  showLogo?: boolean
+}
 
-  const items = NAV_ITEMS.filter((item) => !item.authOnly || isAuthenticated)
-  const mobileMenu: MenuProps = {
-    items: items.map((item) => ({ key: item.to, label: item.label })),
-    onClick: ({ key }) => navigate(String(key)),
-  }
+/**
+ * 全站顶栏。
+ *
+ * 统一创作页使用悬浮模式：静止时完全透明（仅保留登录/注册按钮），
+ * 鼠标移入后整条导航变为不透明，移出恢复透明。
+ * 首页与创作已合并，导航项只保留账户入口，不再有页面跳转项。
+ */
+function AppHeader({ transparent = false, showLogo = true }: AppHeaderProps) {
+  const [hovered, setHovered] = useState(false)
+
+  const headerClass = transparent
+    ? hovered
+      ? 'border-b border-hairline bg-paper shadow-sm'
+      : 'border-b border-transparent bg-transparent shadow-none'
+    : 'border-b border-hairline bg-paper/80 backdrop-blur'
 
   return (
-    <header className="sticky top-0 z-20 border-b border-hairline bg-paper/80 backdrop-blur">
+    <header
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={`sticky top-0 z-30 transition-[background-color,border-color,box-shadow] duration-300 ${headerClass}`}
+    >
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-6 px-4">
-        <Link to="/" className="shrink-0">
-          <Wordmark size="nav" />
-        </Link>
-
-        {/* 响应式显隐交给外层 div：antd 的 .ant-btn 规则优先级高于 @layer 里的 md:hidden */}
-        <nav className="hidden flex-1 items-center gap-1 md:flex">
-          {items.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`rounded-chip px-3 py-1.5 text-sm transition-colors duration-200 ${
-                isActive(location.pathname, item.to)
-                  ? 'bg-clay/10 font-medium text-clay'
-                  : 'text-ink2 hover:text-ink'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        {showLogo ? (
+          <Link to="/" className="shrink-0 animate-fade">
+            <Wordmark size="nav" />
+          </Link>
+        ) : null}
 
         <div className="ml-auto flex items-center gap-2">
-          <div className="md:hidden">
-            <Dropdown menu={mobileMenu} trigger={['click']} placement="bottomRight">
-              <Button type="text" icon={<MenuOutlined />} aria-label="导航" />
-            </Dropdown>
-          </div>
           <AccountActions />
         </div>
       </div>
