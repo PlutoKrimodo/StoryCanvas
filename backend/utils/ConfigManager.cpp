@@ -24,7 +24,8 @@ int ConfigManager::jwtRefreshTokenExpiry = 604800;
 int ConfigManager::jwtGuestTokenExpiry = 604800;
 
 int ConfigManager::guestGenerationQuota = 1;
-int ConfigManager::globalDailyGenerationCap = 20;
+int ConfigManager::guestDailyGenerationCap = 20;
+int ConfigManager::userDailyGenerationCap = 50;
 
 // 接口限流默认值与 docs/16 §7.4 一致；游客会话签发沿用 T-1 的防刷口径
 bool ConfigManager::rateLimitEnabled = true;
@@ -202,9 +203,15 @@ void ConfigManager::applyEnv() {
     guestGenerationQuota =
         toInt(resolve("GUEST_GENERATION_QUOTA", "guest", "generation_quota", "1"), 1);
 
-    globalDailyGenerationCap =
-        toInt(resolve("GLOBAL_DAILY_GENERATION_CAP", "quota", "global_daily_generation_cap", "20"),
+    // 游客池优先读新变量；旧 GLOBAL_DAILY_GENERATION_CAP 仅作兼容别名
+    guestDailyGenerationCap =
+        toInt(resolve("GUEST_DAILY_GENERATION_CAP", "quota", "guest_daily_generation_cap",
+                      resolve("GLOBAL_DAILY_GENERATION_CAP", "quota",
+                              "global_daily_generation_cap", "20")),
               20);
+    userDailyGenerationCap =
+        toInt(resolve("USER_DAILY_GENERATION_CAP", "quota", "user_daily_generation_cap", "50"),
+              50);
 
     // 限流（Q5）：匿名按 IP、认证按用户、生成接口按身份、游客会话签发按 IP
     rateLimitEnabled =
@@ -250,9 +257,13 @@ void ConfigManager::validate() {
     if (dbPassword.empty()) {
         spdlog::warn("DB_PASSWORD 未配置，数据库连接可能失败");
     }
-    if (globalDailyGenerationCap <= 0) {
-        spdlog::warn("GLOBAL_DAILY_GENERATION_CAP = {}（应大于 0）：全站每日额度将不生效",
-                     globalDailyGenerationCap);
+    if (guestDailyGenerationCap <= 0) {
+        spdlog::warn("GUEST_DAILY_GENERATION_CAP = {}（应大于 0）：游客每日额度将不生效",
+                     guestDailyGenerationCap);
+    }
+    if (userDailyGenerationCap <= 0) {
+        spdlog::warn("USER_DAILY_GENERATION_CAP = {}（应大于 0）：登录用户每日额度将不生效",
+                     userDailyGenerationCap);
     }
     if (!rateLimitEnabled) {
         spdlog::warn("RATE_LIMIT_ENABLED=false：接口限流已关闭（仅建议开发 / 压测使用）");
@@ -282,7 +293,9 @@ void ConfigManager::init() {
     applyEnv();
     validate();
 
-    spdlog::info("配置加载完成 | DB {}:{}/{} | AI Service {} | BYOK {} | CORS {} | 日志级别 {}",
-                 dbHost, dbPort, dbName, aiServiceUrl, byokEnabled ? "on" : "off",
-                 corsOrigins, logLevel);
+    spdlog::info(
+        "配置加载完成 | DB {}:{}/{} | AI Service {} | BYOK {} | CORS {} | "
+        "游客池 {} 张/天 | 登录池 {} 张/天 | 日志级别 {}",
+        dbHost, dbPort, dbName, aiServiceUrl, byokEnabled ? "on" : "off",
+        corsOrigins, guestDailyGenerationCap, userDailyGenerationCap, logLevel);
 }

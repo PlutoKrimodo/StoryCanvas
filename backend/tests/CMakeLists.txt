@@ -22,9 +22,11 @@ add_executable(storycanvas_tests
     test_secret_box.cpp
     test_ai_credential_rules.cpp
     test_conversation_dto.cpp
+    test_auth_dto.cpp
     test_file_utils.cpp
     test_rate_limiter.cpp
     ${UTIL_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dto/AuthDto.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../dto/ConversationDto.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../dto/PageDto.cpp
 )

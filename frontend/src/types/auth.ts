@@ -9,6 +9,8 @@ export interface User {
 export interface LoginRequest {
   email: string
   password: string
+  /** 登录方式：email（邮箱）或 username（用户名）；缺省兼容旧客户端 */
+  login_type?: 'email' | 'username'
   /** 可选：游客身份，登录后认领游客期间生成的图片 */
   guest_id?: string
 }

@@ -1,4 +1,4 @@
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { useAuthStore } from '../../stores/authStore'
@@ -23,11 +23,28 @@ describe('认证页与个人中心接入新体系（docs/17 Step 8）', () => {
     useAuthStore.setState({ isAuthenticated: false, user: null })
   })
 
-  it('Login：auth 形态出品牌与注册入口，无冷色渐变页底', () => {
+  it('Login：邮箱/用户名双卡片切换，邮箱模式保留格式校验', async () => {
     const { container } = renderWithTheme(<Login />, { at: '/login' })
     expect(screen.getByRole('img', { name: 'StoryCanvas' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '立即注册' })).toBeInTheDocument()
+
+    // 默认邮箱模式
+    expect(screen.getByRole('tab', { name: /邮箱登录/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
     expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
+
+    // 邮箱格式校验仍然生效
+    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'not-an-email' } })
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'Password1' } })
+    fireEvent.click(screen.getByRole('button', { name: /登\s*录/ }))
+    expect(await screen.findByText('邮箱格式不正确')).toBeInTheDocument()
+
+    // 切到用户名模式：不再使用邮箱字段
+    fireEvent.click(screen.getByRole('tab', { name: /用户名登录/ }))
+    expect(screen.getByLabelText('用户名')).toBeInTheDocument()
+    expect(screen.queryByLabelText('邮箱')).not.toBeInTheDocument()
     expect(container.querySelector('.bg-gradient-to-br')).toBeNull()
   })
 

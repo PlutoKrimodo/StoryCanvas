@@ -39,8 +39,8 @@ def test_generate_defaults_book_to_unassigned(client: TestClient, storage_root):
     assert resp.status_code == 200
     image = resp.json()["image"]
     assert "unassigned" in image["file_path"]
-    # 面积兜底：16x16 远低于真实厂商最小面积（921600），应被等比放大而非报错
-    assert image["width"] * image["height"] >= 921600
+    # 面积兜底：16x16 远低于 Seedream 5.0 的 1K 下限（1,048,576），应被等比放大而非报错
+    assert image["width"] * image["height"] >= 1024 * 1024
 
 
 def test_generate_reuses_parsed_data_and_consistency(client: TestClient):

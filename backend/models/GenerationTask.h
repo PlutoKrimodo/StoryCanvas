@@ -28,6 +28,8 @@ struct GenerationTask {
     // BYOK 快照：创建任务时是否使用用户自带 Key（处理阶段据此决定不回退）
     bool byokLlm = false;
     bool byokImage = false;
+    // 身份快照：游客任务只计入游客池，登录认领后也不改写
+    bool isGuest = false;
 
     // 批次编排：batchId 为空表示旧版单张任务
     std::optional<std::string> batchId;

@@ -26,8 +26,11 @@ struct RegisterRequest {
 
 //登录请求
 struct LoginRequest {
+    // 登录标识：邮箱或用户名，由 loginType 决定。沿用 email 字段名以兼容旧客户端。
     std::string email;
     std::string password;
+    // email | username；空值兼容旧客户端（按邮箱校验，并尝试用户名兜底）
+    std::string loginType;
     std::string guestId;  // 可选：游客身份，登录时认领其生成结果
 
     static LoginRequest fromJson(const json &j);

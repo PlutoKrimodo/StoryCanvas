@@ -3,6 +3,7 @@ import { Spin, Typography } from 'antd'
 
 import ImageGridMessage from './ImageGridMessage'
 import StoryboardMessage from './StoryboardMessage'
+import StoryboardSkeleton from './StoryboardSkeleton'
 import type { BatchItem, BatchView, ChatMessage, StoryboardPanel } from '../../types/conversation'
 
 const { Text } = Typography
@@ -60,6 +61,11 @@ function MessageList(props: MessageListProps) {
               </div>
             </div>
           )
+        }
+
+        // 分镜接口尚未返回：显示带阶段文案的骨架屏
+        if (message.pending) {
+          return <StoryboardSkeleton key={message.id} />
         }
 
         const items = itemsOf(message, props.batch)

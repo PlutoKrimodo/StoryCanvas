@@ -252,7 +252,7 @@ ServiceResult UserAiCredentialService::test(const std::string &userId, const jso
         prepared.apiBase, prepared.model, testResult, transportError);
 
     if (!reachable) {
-        // 业务结果仍返回 200，让前端统一展示「测试失败 + 可仍然保存」
+        // 业务结果仍返回 200，让前端统一展示测试失败原因；失败不允许保存
         return ok("测试连接未完成", {
             {"ok", false},
             {"verified", false},

@@ -33,8 +33,9 @@ public:
     // Guest-first（T-1 能力层）
     static int guestGenerationQuota;  // 游客可免费生成的图片数（默认 1）
 
-    // 全站成本封顶：今天所有用户合计可创建的任务数上限
-    static int globalDailyGenerationCap;
+    // 每日成本封顶：游客池与登录用户池完全独立
+    static int guestDailyGenerationCap;  // 所有游客共享，默认 20
+    static int userDailyGenerationCap;   // 所有登录用户共享，默认 50
 
     // 接口限流（Q5 / Q3①，规格见 docs/16 §7.4，实现在 filters/RateLimitFilter）
     static bool rateLimitEnabled;             // 总开关（开发 / 压测可关）

@@ -7,11 +7,16 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
+import httpx
+
 from ...models.schemas import ImageGenerationParams, ImageGenerationResult
 from ...utils.config import settings
 from ...utils.exceptions import ImageProviderException
 from ...utils.http_client import describe_http_error, post_json
 from .base import ImageProvider
+
+# 只有 Seedream 3.0 系列支持 seed；4.0/4.5/5.0 均不支持，发送会被判为非法参数。
+_SEED_MODEL_HINTS = ("seedream-3-0",)
 
 
 class DoubaoProvider(ImageProvider):
@@ -36,18 +41,22 @@ class DoubaoProvider(ImageProvider):
         if not self.api_key:
             raise ImageProviderException("ARK_API_KEY 未配置，无法调用豆包 Seedream", 503)
 
+        prompt = params.prompt
+        if params.negative_prompt:
+            # ARK 不解析 --no 语法；负向约束用自然语言写入 prompt
+            prompt = f"{prompt}\n\nAvoid: {params.negative_prompt}"
+
         payload: Dict[str, object] = {
             "model": self.model,
-            "prompt": params.prompt,
+            "prompt": prompt,
             "size": f"{params.width}x{params.height}",
-            "n": 1,
             "response_format": "url",
             "watermark": False,
         }
-        if params.negative_prompt:
-            # Seedream 通过 prompt 内联负向提示时兼容性最好
-            payload["prompt"] = f"{params.prompt}\n\n--no {params.negative_prompt}"
-        if params.seed is not None:
+        # Seedream 4.0/4.5/5.0 不支持 seed；仅 3.0 系列保留可复现能力
+        if params.seed is not None and any(
+            hint in self.model for hint in _SEED_MODEL_HINTS
+        ):
             payload["seed"] = params.seed
 
         try:
@@ -64,7 +73,36 @@ class DoubaoProvider(ImageProvider):
             status, reason = describe_http_error(exc)
             # 401/402/403/429 快速失败，避免重试导致重复计费
             code = status if status in (401, 402, 403, 429) else 502
-            self.logger.error("豆包 Seedream 调用失败: %s", reason)
+            if isinstance(exc, httpx.HTTPStatusError):
+                # 只记录厂商错误码与消息，便于定位非法字段；不输出 Key / prompt
+                detail: Dict[str, object] = {}
+                try:
+                    body = exc.response.json()
+                    error = body.get("error") if isinstance(body, dict) else None
+                    if isinstance(error, dict):
+                        detail = error
+                except Exception:
+                    detail = {}
+                detail_code = str(detail.get("code", ""))
+                detail_message = str(detail.get("message", ""))
+                self.logger.error(
+                    "豆包 Seedream 调用失败: %s | code=%s message=%s",
+                    reason,
+                    detail_code,
+                    detail_message,
+                )
+                # 版权 / 内容安全策略是确定性失败，快速失败并给出可读原因，避免无意义重试
+                if (
+                    "SensitiveContentDetected" in detail_code
+                    or "PolicyViolation" in detail_code
+                    or "copyright" in detail_message.lower()
+                ):
+                    raise ImageProviderException(
+                        "图像涉及版权或内容安全限制，请使用原创角色与场景后重试",
+                        403,
+                    ) from exc
+            else:
+                self.logger.error("豆包 Seedream 调用失败: %s", reason)
             raise ImageProviderException(f"豆包 Seedream 调用失败：{reason}", code) from exc
 
         return self._to_result(data, params)

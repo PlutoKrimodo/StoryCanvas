@@ -68,7 +68,6 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testResult, setTestResult] = useState<CredentialTestResult | null>(null)
-  const [pendingSave, setPendingSave] = useState(false)
   const [formError, setFormError] = useState('')
 
   const syncForm = useCallback((cat: CredentialCatalog, ov: AiCredentialOverview) => {
@@ -133,7 +132,6 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
 
   const resetFeedback = () => {
     setTestResult(null)
-    setPendingSave(false)
     setFormError('')
   }
 
@@ -199,10 +197,9 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
         throw new Error(data.message || '测试失败')
       }
       setTestResult(result)
+      // 严格校验：只有测试通过才保存；失败仅展示原因，不提供绕过入口
       if (result.ok) {
         await doSave()
-      } else {
-        setPendingSave(true)
       }
     } catch (error) {
       console.error('测试 API Key 失败', error)
@@ -323,7 +320,6 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
           testing={testing}
           saving={saving}
           testResult={testResult}
-          pendingSave={pendingSave}
           formError={formError}
           onProviderChange={handleProviderChange}
           onApiKeyChange={(value) => {
@@ -340,7 +336,6 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
           }}
           onAdvancedChange={setAdvancedOpen}
           onTestAndSave={() => void handleTestAndSave()}
-          onSaveAnyway={() => void doSave()}
           onCancel={() => {
             setEditing((prev) => ({ ...prev, [active]: false }))
             setApiKey((prev) => ({ ...prev, [active]: '' }))

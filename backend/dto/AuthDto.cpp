@@ -45,6 +45,9 @@ LoginRequest LoginRequest::fromJson(const json &j) {
     LoginRequest req;
     if (j.contains("email")) req.email = j["email"].get<std::string>();
     if (j.contains("password")) req.password = j["password"].get<std::string>();
+    if (j.contains("login_type") && j["login_type"].is_string()) {
+        req.loginType = j["login_type"].get<std::string>();
+    }
     if (j.contains("guest_id") && j["guest_id"].is_string()) {
         req.guestId = j["guest_id"].get<std::string>();
     }
@@ -59,7 +62,13 @@ std::vector<FieldError> LoginRequest::getErrors() const {
     std::vector<FieldError> errors;
     
     if (email.empty()) {
-        errors.push_back({"email", "邮箱不能为空"});
+        errors.push_back({"email", "邮箱或用户名不能为空"});
+    } else if (loginType != "username" && email.find('@') == std::string::npos) {
+        // 邮箱模式（以及无 login_type 的旧客户端）保留邮箱格式校验
+        errors.push_back({"email", "邮箱格式无效"});
+    }
+    if (!loginType.empty() && loginType != "email" && loginType != "username") {
+        errors.push_back({"login_type", "登录方式仅支持 email 或 username"});
     }
     
     if (password.empty()) {

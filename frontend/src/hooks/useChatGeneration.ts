@@ -72,6 +72,8 @@ export interface SendPlanOptions {
   size: string
   bookId?: string
   seed?: number | null
+  /** 是否先渲染乐观用户消息与分镜占位；重新拆分场景不应传 */
+  optimistic?: boolean
 }
 
 /**
@@ -271,6 +273,38 @@ export function useChatGeneration() {
   const sendPlan = useCallback(
     async (options: SendPlanOptions) => {
       setSubmitting(true)
+
+      // 乐观占位：点击发送后立即出现用户气泡 + 分镜骨架屏，避免空白等待
+      const pendingUserId = options.optimistic ? `local-user-pending-${Date.now()}` : ''
+      const pendingAiId = options.optimistic ? `local-ai-pending-${Date.now()}` : ''
+      if (options.optimistic) {
+        const pendingUser: ChatMessage = {
+          id: pendingUserId,
+          role: 'user',
+          messageType: 'text',
+          content: options.text,
+          payload: {},
+          createdAt: nowText(),
+          local: true,
+        }
+        const pendingAssistant: ChatMessage = {
+          id: pendingAiId,
+          role: 'assistant',
+          messageType: 'text',
+          content: '',
+          payload: {},
+          createdAt: nowText(),
+          local: true,
+          pending: true,
+        }
+        setMessages((prev) => [...prev, pendingUser, pendingAssistant])
+      }
+
+      const removePending = (prev: ChatMessage[]) =>
+        options.optimistic
+          ? prev.filter((message) => message.id !== pendingUserId && message.id !== pendingAiId)
+          : prev
+
       try {
         const { data } = await conversationsApi.createPlan({
           conversation_id: conversationId ?? undefined,
@@ -307,7 +341,7 @@ export function useChatGeneration() {
           createdAt: nowText(),
           local: true,
         }
-        setMessages((prev) => [...prev, userMessage, assistantMessage])
+        setMessages((prev) => [...removePending(prev), userMessage, assistantMessage])
 
         // 单张时减少一次确认点击；多张必须由用户先确认分镜
         if (plan.panel_count === 1) {
@@ -321,6 +355,13 @@ export function useChatGeneration() {
           )
         }
         return plan as PlanResponse
+      } catch (error) {
+        if (options.optimistic) {
+          setMessages((prev) =>
+            prev.filter((message) => message.id !== pendingUserId && message.id !== pendingAiId),
+          )
+        }
+        throw error
       } finally {
         setSubmitting(false)
       }

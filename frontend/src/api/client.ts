@@ -187,9 +187,22 @@ client.interceptors.response.use(
     }
 
     // 静默请求（如后台轮询）不弹全局提示：它会被自动重试，弹窗会连续刷屏。
-    // 注意：此处只提示 message，禁止打印请求体（可能含密码）
+    // 注意：此处只提示 message / 字段错误，禁止打印请求体（可能含密码）
     if (!original?.silent) {
-      message.error(error.response?.data?.message || '请求失败')
+      const payload = error.response?.data as
+        | {
+            message?: string
+            data?: { errors?: Array<{ field?: string; message?: string }> }
+          }
+        | undefined
+      const detail = Array.isArray(payload?.data?.errors)
+        ? payload.data.errors
+            .map((item) => (typeof item?.message === 'string' ? item.message : ''))
+            .filter(Boolean)
+            .join('；')
+        : ''
+      const base = payload?.message || '请求失败'
+      message.error(detail ? `${base}：${detail}` : base)
     }
     return Promise.reject(error)
   },

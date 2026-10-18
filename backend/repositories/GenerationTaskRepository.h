@@ -42,8 +42,9 @@ public:
     /** 统计某用户指定状态的任务数（游客配额用，status 传 completed）。 */
     static int countByUserAndStatus(const std::string &userId, const std::string &status);
 
-    /** 统计今天（Asia/Shanghai）全站创建的任务数（全局每日额度用）。 */
-    static int countCreatedToday();
+    /** 统计今天（Asia/Shanghai）指定身份创建的非双项 BYOK 任务数。
+     *  isGuest=true 为游客池，false 为登录用户池；两个池互不影响。 */
+    static int countCreatedTodayByScope(bool isGuest);
 
     /** 把长时间处于 pending/processing 的任务标记为 failed（启动自愈）。 */
     static int failStaleTasks();

@@ -15,7 +15,7 @@ const char *kSelectColumns =
     "SELECT t.id::text AS id, t.user_id::text AS user_id, t.book_id::text AS book_id, "
     "       t.page_id::text AS page_id, t.prompt, t.original_text, "
     "       t.parsed_data::text AS parsed_data, t.status, t.result_url, t.error_message, "
-    "       t.model_used, t.byok_llm, t.byok_image, "
+    "       t.model_used, t.byok_llm, t.byok_image, t.is_guest, "
     "       t.batch_id::text AS batch_id, t.panel_index, t.panel_text, "
     "       t.parameters::text AS parameters, "
     "       t.created_at::text AS created_at, t.updated_at::text AS updated_at, "
@@ -38,10 +38,10 @@ bool GenerationTaskRepository::create(GenerationTask &task) {
         auto result = db->execSqlSync(
             "INSERT INTO generation_tasks "
             "(user_id, book_id, page_id, original_text, prompt, status, parameters, "
-            " byok_llm, byok_image, batch_id, panel_index, panel_text) "
+            " byok_llm, byok_image, is_guest, batch_id, panel_index, panel_text) "
             "VALUES ($1, NULLIF($2, '')::uuid, NULLIF($3, '')::uuid, NULLIF($4, ''), $5, "
-            "        'pending', $6::jsonb, $7, $8, NULLIF($9, '')::uuid, "
-            "        NULLIF($10, -1), NULLIF($11, '')) "
+            "        'pending', $6::jsonb, $7, $8, $9, NULLIF($10, '')::uuid, "
+            "        NULLIF($11, -1), NULLIF($12, '')) "
             "RETURNING id::text, created_at::text, updated_at::text",
             task.userId,
             task.bookId.value_or(""),
@@ -51,6 +51,7 @@ bool GenerationTaskRepository::create(GenerationTask &task) {
             parametersDump,
             task.byokLlm,
             task.byokImage,
+            task.isGuest,
             task.batchId.value_or(""),
             task.panelIndex.has_value() ? *task.panelIndex : -1,
             task.panelText.value_or(""));
@@ -256,21 +257,23 @@ int GenerationTaskRepository::countByUserAndStatus(const std::string &userId,
     }
 }
 
-int GenerationTaskRepository::countCreatedToday() {
+int GenerationTaskRepository::countCreatedTodayByScope(bool isGuest) {
     try {
         auto db = drogon::app().getDbClient();
         // created_at 是 TIMESTAMPTZ，裸 date_trunc('day', now()) 按 UTC 切日，
         // 会出现早上 8 点才重置的偏差，故显式按 Asia/Shanghai 取当日零点。
         // 不按状态过滤：failed 已计费，cancelled 也可能发生在 Ark 调用发出之后。
-        // BYOK 双项任务不花系统 Key 的钱，也不占用其他人的全站额度。
+        // 双项 BYOK 任务不花系统 Key 的钱，也不占用任何每日池。
         auto result = db->execSqlSync(
             "SELECT COUNT(*)::int AS cnt FROM generation_tasks "
             "WHERE created_at >= ("
             "date_trunc('day', now() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai') "
-            "AND NOT (byok_llm AND byok_image)");
+            "AND is_guest = $1 "
+            "AND NOT (byok_llm AND byok_image)",
+            isGuest);
         return result.empty() ? 0 : result[0]["cnt"].as<int>();
     } catch (const std::exception &e) {
-        spdlog::error("统计今日全站任务数失败: {}", e.what());
+        spdlog::error("统计今日{}任务数失败: {}", isGuest ? "游客" : "登录用户", e.what());
         return 0;
     }
 }

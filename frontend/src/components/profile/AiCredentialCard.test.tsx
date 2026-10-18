@@ -128,7 +128,7 @@ describe('AiCredentialCard（BYOK 接入）', () => {
     )
   })
 
-  it('测试失败时提供「仍然保存」而不是阻塞用户', async () => {
+  it('测试失败时不保存，也不提供仍然保存', async () => {
     api.test.mockResolvedValue({
       data: {
         data: { ok: false, verified: false, latency_ms: 0, message: 'API Key 无效（HTTP 401）' },
@@ -142,8 +142,11 @@ describe('AiCredentialCard（BYOK 接入）', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '保存并验证' }))
 
-    expect(await screen.findByText('API Key 无效（HTTP 401）')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '仍然保存' })).toBeInTheDocument()
+    expect(
+      await screen.findByText('API Key 无效（HTTP 401）', undefined, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '仍然保存' })).not.toBeInTheDocument()
+    await waitFor(() => expect(api.save).not.toHaveBeenCalled())
   })
 
   it('已配置时脱敏展示，并支持展开高级设置查看自动带出的 Base URL', async () => {

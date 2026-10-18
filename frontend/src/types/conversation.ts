@@ -80,6 +80,8 @@ export interface ChatMessage {
   createdAt: string
   /** 仅前端本地消息，用于乐观渲染 */
   local?: boolean
+  /** 前端占位消息：等待分镜接口返回 */
+  pending?: boolean
 }
 
 export interface ConversationSummary {

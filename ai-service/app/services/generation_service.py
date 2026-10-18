@@ -28,9 +28,9 @@ from .text_analyzer import TextAnalyzerService
 # 尺寸合法区间（防止恶意/异常参数拖垮生成）
 _MIN_SIZE = 256
 _MAX_SIZE = 2048
-# 真实厂商（豆包 Seedream）要求图片面积不低于 921600 像素（约 1280x720），
-# 低于该值会直接返回 400 InvalidParameter，故此处做等比放大兜底。
-_MIN_AREA = 921600
+# Seedream 5.0 的 1K 档位下限为 1024x1024（1,048,576 像素）；
+# 低于该值（如 1280x768 = 983,040）可能返回 400 InvalidParameter，故等比放大兜底。
+_MIN_AREA = 1024 * 1024
 
 
 def _format_size(num_bytes: int) -> str:

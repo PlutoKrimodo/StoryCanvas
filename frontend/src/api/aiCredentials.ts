@@ -38,6 +38,7 @@ export const aiCredentialsApi = {
     client.post<ApiResponse<CredentialTestResult>>(
       '/users/me/ai-credentials/test',
       payload,
-      { silent: true },
+      // 图像 Key 会真实生成一张 1K 测试图，10–20 秒，覆盖全局 30 秒
+      { silent: true, timeout: 90000 },
     ),
 }

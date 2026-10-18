@@ -22,7 +22,6 @@ export interface AiCredentialFormProps {
   testing: boolean
   saving: boolean
   testResult: CredentialTestResult | null
-  pendingSave: boolean
   formError: string
   onProviderChange: (value: string) => void
   onApiKeyChange: (value: string) => void
@@ -30,7 +29,6 @@ export interface AiCredentialFormProps {
   onModelChange: (value: string) => void
   onAdvancedChange: (open: boolean) => void
   onTestAndSave: () => void
-  onSaveAnyway: () => void
   onCancel: () => void
 }
 
@@ -53,7 +51,6 @@ function AiCredentialForm(props: AiCredentialFormProps) {
     testing,
     saving,
     testResult,
-    pendingSave,
     formError,
   } = props
 
@@ -182,18 +179,19 @@ function AiCredentialForm(props: AiCredentialFormProps) {
             description={
               testResult.ok
                 ? testResult.verified
-                  ? `已用 1 token 真实探测，耗时 ${testResult.latency_ms}ms`
-                  : '图像配置仅做格式校验，首次生成时才会真正调用厂商'
-                : '你可以修正后重试，也可以仍然保存（生成时会再次验证）'
-            }
-            action={
-              !testResult.ok && pendingSave ? (
-                <Button size="small" loading={saving} onClick={props.onSaveAnyway}>
-                  仍然保存
-                </Button>
-              ) : null
+                  ? capability === 'image'
+                    ? `已用 1 张 1K 测试图验证，耗时 ${testResult.latency_ms}ms（会计费一次）`
+                    : `已用 1 token 真实探测，耗时 ${testResult.latency_ms}ms`
+                  : '配置格式有效，将在首次生成时验证'
+                : '未通过验证，不会保存；请修正 Key 或网络后重试。'
             }
           />
+        ) : null}
+
+        {capability === 'image' ? (
+          <Text type="secondary" className="block text-xs">
+            保存并验证会生成一张 1K 测试图，约 10–20 秒，会计费一次。
+          </Text>
         ) : null}
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

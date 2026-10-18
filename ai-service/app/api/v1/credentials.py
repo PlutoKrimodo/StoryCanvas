@@ -4,7 +4,7 @@
 因此：
   - 不记录请求体 / 请求头；
   - 异常只返回可读原因，不拼接厂商响应体；
-  - 图像能力只做格式校验，不发真实生成请求（避免产生计费）。
+  - 图像能力生成一张 1K 测试图做真实验证（会计费一次），测试图不落盘。
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from ...models.schemas import (
     CredentialTestRequest,
     CredentialTestResponse,
     ImageCredential,
+    ImageGenerationParams,
     LLMCredential,
 )
 from ...utils.exceptions import AIServiceException
@@ -69,8 +70,7 @@ async def test_credential(request: CredentialTestRequest) -> CredentialTestRespo
             )
 
         if request.capability == "image":
-            # 只构造 Provider 校验协议与必填项，不发起真实生成（避免计费）
-            build_image_provider(
+            provider = build_image_provider(
                 ImageCredential(
                     provider=request.provider,
                     api_key=request.api_key,
@@ -78,11 +78,20 @@ async def test_credential(request: CredentialTestRequest) -> CredentialTestRespo
                     model=request.model,
                 )
             )
+            # 真实生成一张 1K 测试图验证 Key；生成后丢弃，不落盘、不下载
+            await provider.generate(
+                ImageGenerationParams(
+                    prompt="a single simple color swatch, one continuous image",
+                    width=1024,
+                    height=1024,
+                    negative_prompt="text, watermark, multiple panels",
+                )
+            )
             return CredentialTestResponse(
                 ok=True,
-                verified=False,
+                verified=True,
                 latency_ms=elapsed_ms(),
-                message="配置格式有效，将在首次生成时验证",
+                message="连接成功，图像 API Key 可用（已生成 1 张测试图，会计费一次）",
             )
 
         return CredentialTestResponse(

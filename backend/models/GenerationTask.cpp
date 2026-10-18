@@ -53,6 +53,7 @@ GenerationTask GenerationTask::fromRow(const drogon::orm::Row &row) {
     task.modelUsed = rowutil::optString(row["model_used"]);
     task.byokLlm = row["byok_llm"].as<bool>();
     task.byokImage = row["byok_image"].as<bool>();
+    task.isGuest = row["is_guest"].as<bool>();
     task.batchId = rowutil::optString(row["batch_id"]);
     task.panelIndex = rowutil::optInt(row["panel_index"]);
     task.panelText = rowutil::optString(row["panel_text"]);

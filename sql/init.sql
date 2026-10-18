@@ -162,6 +162,8 @@ CREATE TABLE generation_tasks (
     -- BYOK 任务快照：创建时记录是否使用用户自带 Key，处理阶段据此决定是否可回退
     byok_llm BOOLEAN NOT NULL DEFAULT false,
     byok_image BOOLEAN NOT NULL DEFAULT false,
+    -- 身份快照：游客任务只计入游客池，登录认领后也不改写
+    is_guest BOOLEAN NOT NULL DEFAULT false,
     -- 批次编排：batch_id 为空表示旧版单张任务；panel_index 从 0 开始
     batch_id UUID REFERENCES generation_batches(id) ON DELETE SET NULL,
     panel_index INTEGER,
@@ -175,6 +177,9 @@ CREATE INDEX idx_generation_tasks_user_id ON generation_tasks(user_id);
 CREATE INDEX idx_generation_tasks_book_id ON generation_tasks(book_id);
 CREATE INDEX idx_generation_tasks_status ON generation_tasks(status);
 CREATE INDEX idx_generation_tasks_batch ON generation_tasks(batch_id, panel_index);
+-- 游客池 / 登录池每日计数按身份 + 日期过滤
+CREATE INDEX idx_generation_tasks_created_guest
+    ON generation_tasks (is_guest, created_at);
 
 -- ==================== 生成图片表 ====================
 CREATE TABLE generated_images (

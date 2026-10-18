@@ -15,6 +15,42 @@ TEST(ConversationDtoTest, AcceptsValidPlanRequest) {
     EXPECT_EQ(request.imageCount, 3);
 }
 
+TEST(ConversationDtoTest, CountsChineseTextByCharactersNotBytes) {
+    std::string text;
+    for (int i = 0; i < 700; ++i) text += "画";  // 700 字符 / 2100 字节
+
+    auto request = CreatePlanRequest::fromJson({
+        {"text", text},
+        {"image_count", 4},
+        {"style", "oil_painting"},
+        {"size", "1024x1024"},
+    });
+
+    EXPECT_TRUE(request.validate());
+}
+
+TEST(ConversationDtoTest, AcceptsChinesePanelWithin500Characters) {
+    std::string text;
+    for (int i = 0; i < 200; ++i) text += "画";  // 200 字符 / 600 字节
+
+    json body = json::object();
+    body["panels"] = json::array({{{"index", 0}, {"text", text}}});
+
+    auto request = UpdatePlanRequest::fromJson(body);
+    EXPECT_TRUE(request.validate());
+}
+
+TEST(ConversationDtoTest, RejectsPanelOver500Characters) {
+    std::string text;
+    for (int i = 0; i < 501; ++i) text += "画";
+
+    json body = json::object();
+    body["panels"] = json::array({{{"index", 0}, {"text", text}}});
+
+    auto request = UpdatePlanRequest::fromJson(body);
+    EXPECT_FALSE(request.validate());
+}
+
 TEST(ConversationDtoTest, RejectsInvalidCountOrStyle) {
     auto countTooLarge = CreatePlanRequest::fromJson({
         {"text", "故事"}, {"image_count", 13}, {"style", "watercolor"}, {"size", "1024x1024"},

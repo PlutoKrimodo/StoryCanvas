@@ -21,6 +21,21 @@ std::string trim(const std::string &text) {
     return text.substr(begin, end - begin);
 }
 
+/**
+ * UTF-8 字符数（按 Unicode 码点计数）。
+ *
+ * 前端 `string.length` 与 AI 服务 Pydantic 的 `max_length` 都按字符计数；
+ * 后端如果直接 `std::string::size()` 会按字节计数，一个中文字符占 3 字节，
+ * 导致 200 字的中文分镜被误判为超过 500“字符”。这里统一为字符口径。
+ */
+size_t utf8Length(const std::string &text) {
+    size_t count = 0;
+    for (unsigned char ch : text) {
+        if ((ch & 0xC0) != 0x80) ++count;
+    }
+    return count;
+}
+
 bool validStyle(const std::string &style) {
     return kStyles.count(style) > 0;
 }
@@ -67,7 +82,7 @@ std::vector<FieldError> CreatePlanRequest::getErrors() const {
     const std::string value = trim(text);
     if (value.empty()) {
         errors.push_back({"text", "请输入故事描述"});
-    } else if (value.size() > kMaxTextLength) {
+    } else if (utf8Length(value) > kMaxTextLength) {
         errors.push_back({"text", "故事描述不能超过 2000 个字符"});
     }
     if (imageCount < 1 || imageCount > kMaxPanels) {
@@ -116,7 +131,7 @@ std::vector<FieldError> UpdatePlanRequest::getErrors() const {
             break;
         }
         const std::string value = trim(panel.text);
-        if (value.empty() || value.size() > 500) {
+        if (value.empty() || utf8Length(value) > 500) {
             errors.push_back({"panels", "每格描述需为 1–500 个字符"});
             break;
         }
@@ -176,7 +191,7 @@ bool CreateConversationRequest::validate() const {
 
 std::vector<FieldError> CreateConversationRequest::getErrors() const {
     std::vector<FieldError> errors;
-    if (trim(title).size() > 120) {
+    if (utf8Length(trim(title)) > 120) {
         errors.push_back({"title", "标题不能超过 120 个字符"});
     }
     if (!style.empty() && !validStyle(style)) {

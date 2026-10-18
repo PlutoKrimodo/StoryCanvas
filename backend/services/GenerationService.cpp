@@ -79,17 +79,31 @@ bool checkGuestQuota(const std::string &userId,
 }
 
 /**
- * 全站每日额度校验：今天所有用户创建的任务总数达到上限即拒绝（429）。
- * 游客身份可无限重取，个人额度封顶不住共用系统 Key 的花费，故需全站上限。
+ * 游客每日池：所有游客共享，默认 20 张/天；与登录用户池完全独立。
  */
-bool checkGlobalDailyQuota(int imageCount, ServiceResult &result) {
-    if (GenerationTaskRepository::countCreatedToday() + imageCount <=
-        ConfigManager::globalDailyGenerationCap) {
+bool checkGuestDailyQuota(int imageCount, ServiceResult &result) {
+    if (GenerationTaskRepository::countCreatedTodayByScope(true) + imageCount <=
+        ConfigManager::guestDailyGenerationCap) {
         return true;
     }
     result.code = 429;
-    result.message = "今日全站生成额度已用完（共 " +
-                     std::to_string(ConfigManager::globalDailyGenerationCap) +
+    result.message = "今日游客生成额度已用完（共 " +
+                     std::to_string(ConfigManager::guestDailyGenerationCap) +
+                     " 张），请明天再来或登录后继续";
+    return false;
+}
+
+/**
+ * 登录用户每日池：所有登录用户共享，默认 50 张/天；与游客池完全独立。
+ */
+bool checkUserDailyQuota(int imageCount, ServiceResult &result) {
+    if (GenerationTaskRepository::countCreatedTodayByScope(false) + imageCount <=
+        ConfigManager::userDailyGenerationCap) {
+        return true;
+    }
+    result.code = 429;
+    result.message = "今日登录用户生成额度已用完（共 " +
+                     std::to_string(ConfigManager::userDailyGenerationCap) +
                      " 张），请明天再来";
     return false;
 }
@@ -365,13 +379,8 @@ ServiceResult GenerationService::createTask(const std::string &userId,
     if (!resolveByokState(userId, isGuest, byok, result)) {
         return result;
     }
-    if (!AiCredentialRules::shouldExemptQuota(byok.llm, byok.image)) {
-        if (!checkGlobalDailyQuota(1, result)) {
-            return result;
-        }
-        if (!checkGuestQuota(userId, isGuest, 1, result)) {
-            return result;
-        }
+    if (!checkImageQuota(userId, isGuest, 1, byok.llm, byok.image, result)) {
+        return result;
     }
 
     // 1. 归属校验（可选绑定绘本 / 页）
@@ -397,6 +406,7 @@ ServiceResult GenerationService::createTask(const std::string &userId,
     task.prompt = "";
     task.byokLlm = byok.llm;
     task.byokImage = byok.image;
+    task.isGuest = isGuest;
     task.parameters = req.parameters.is_object() ? req.parameters : json::object();
     task.parameters["style"] = req.style;  // 供工作线程回传给 AI 服务
 
@@ -514,13 +524,8 @@ ServiceResult GenerationService::regenerate(const std::string &userId,
     if (!resolveByokState(userId, isGuest, byok, result)) {
         return result;
     }
-    if (!AiCredentialRules::shouldExemptQuota(byok.llm, byok.image)) {
-        if (!checkGlobalDailyQuota(1, result)) {
-            return result;
-        }
-        if (!checkGuestQuota(userId, isGuest, 1, result)) {
-            return result;
-        }
+    if (!checkImageQuota(userId, isGuest, 1, byok.llm, byok.image, result)) {
+        return result;
     }
 
     auto origin = GenerationTaskRepository::findById(taskId);
@@ -540,6 +545,7 @@ ServiceResult GenerationService::regenerate(const std::string &userId,
     task.prompt = "";
     task.byokLlm = byok.llm;
     task.byokImage = byok.image;
+    task.isGuest = isGuest;
     task.parameters = origin->parameters;
     if (req.parameters.is_object()) {
         for (auto it = req.parameters.begin(); it != req.parameters.end(); ++it) {
@@ -580,10 +586,13 @@ bool GenerationService::checkImageQuota(const std::string &userId,
     if (AiCredentialRules::shouldExemptQuota(byokLlm, byokImage)) {
         return true;
     }
-    if (!checkGlobalDailyQuota(count, result)) {
-        return false;
+    if (isGuest) {
+        if (!checkGuestDailyQuota(count, result)) {
+            return false;
+        }
+        return checkGuestQuota(userId, true, count, result);
     }
-    return checkGuestQuota(userId, isGuest, count, result);
+    return checkUserDailyQuota(count, result);
 }
 
 bool GenerationService::enqueueTask(const std::string &taskId) {

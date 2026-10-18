@@ -20,7 +20,10 @@ RE_ALLOW='allow-secret'
 RE_PLACEHOLDER='change_?me|changeme|your[_-][a-z0-9_]*|[_-]here$|placeholder|sample|fake|dummy|test[_-]?key|demo[_-]?key|example|xxxxxxxx|<[^>]{2,}>|\$\{?[A-Za-z0-9_]+'
 
 # ==================== 关卡 A：文件名 ====================
-RE_BAD_NAME='(^|/)\.env(\.[A-Za-z0-9-]+)?$|\.(pem|key|p12|jks|keystore|kdbx)$|id_[rs]a([0-9]+)?$|credentials|\.npmrc$|\.pypirc$|settings\.local\.json$|secrets\.ya?ml$'
+# 只按“密钥文件”拦截：数据/配置类 credentials 与私钥文件。
+# 源码里的 credentials.py / *CredentialService.cpp / aiCredentials.ts 属于业务代码，
+# 不应因为文件名含 credential 被拦；它们仍会经过关卡 B+C 的内容扫描。
+RE_BAD_NAME='(^|/)\.env(\.[A-Za-z0-9-]+)?$|\.(pem|key|p12|jks|keystore|kdbx)$|id_[rs]a([0-9]+)?$|(^|/)[^/]*credential[^/]*\.(json|ya?ml|toml|ini|xml|txt|cfg|conf|properties|csv)$|(^|/)credentials?$|\.npmrc$|\.pypirc$|settings\.local\.json$|secrets\.ya?ml$'
 RE_GOOD_NAME='(\.env|\.template|\.prose|\.model)\.(example|sample|template|dist)$'
 
 # 从统一 diff 里取「新增行」，输出  文件<TAB>新行号<TAB>内容

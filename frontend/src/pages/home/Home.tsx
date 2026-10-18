@@ -123,7 +123,10 @@ function Home() {
   const handleSend = () => {
     const value = text.trim()
     if (!value || chat.submitting) return
+    const wasHome = !started
     setText('')
+    // 点击即进入工作室：大 LOGO 渐隐与分镜请求并行，避免十几秒的首页空白等待
+    setStarted(true)
     void chat
       .sendPlan({
         text: value,
@@ -132,12 +135,17 @@ function Home() {
         size,
         bookId,
         seed,
+        optimistic: true,
       })
-      .then(() => setStarted(true))
       .catch((error) => {
         console.error('创建分镜失败', error)
         message.error(error instanceof Error ? error.message : '创建分镜失败')
         setText(value)
+        // 首条发送失败：回到搜索式首页；已有会话则留在工作室
+        if (wasHome) {
+          setStarted(false)
+          setHeroGone(false)
+        }
       })
   }
 

@@ -292,6 +292,7 @@ ServiceResult GenerationBatchService::startBatch(const std::string &userId,
         task.prompt = "";
         task.byokLlm = batch->byokLlm;
         task.byokImage = batch->byokImage;
+        task.isGuest = isGuest;
         task.batchId = batch->id;
         task.panelIndex = index;
         task.panelText = panelText;

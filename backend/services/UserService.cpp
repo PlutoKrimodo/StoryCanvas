@@ -107,10 +107,19 @@ ServiceResult UserService::registerUser(const RegisterRequest &req) {
 ServiceResult UserService::loginUser(const LoginRequest &req) {
     ServiceResult result;
 
-    auto userOpt = UserRepository::findByEmail(req.email);
+    // 登录方式显式区分邮箱 / 用户名；旧客户端没有 login_type 时保留邮箱优先兜底
+    std::optional<User> userOpt;
+    if (req.loginType == "username") {
+        userOpt = UserRepository::findByUsername(req.email);
+    } else {
+        userOpt = UserRepository::findByEmail(req.email);
+        if (!userOpt && req.loginType.empty()) {
+            userOpt = UserRepository::findByUsername(req.email);
+        }
+    }
     if (!userOpt) {
         result.code = 401;
-        result.message = "邮箱或密码有错误";
+        result.message = "账号或密码有错误";
         return result;
     }
 
@@ -118,7 +127,7 @@ ServiceResult UserService::loginUser(const LoginRequest &req) {
 
     if (!PasswordUtils::verifyPassword(req.password, user.passwordHash)) {
         result.code = 401;
-        result.message = "邮箱或密码有错误";
+        result.message = "账号或密码有错误";
         return result;
     }
 

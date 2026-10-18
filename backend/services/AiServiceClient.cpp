@@ -195,12 +195,14 @@ bool AiServiceClient::testCredential(const std::string &capability,
 
     {
         std::unique_lock<std::mutex> lock(state->mutex);
-        constexpr int kTestTimeoutSeconds = 10;
+        // 图像 Key 会真实生成一张 1K 测试图（10–20s），LLM 只做 1 token 探测
+        const int testTimeoutSeconds = capability == "image" ? 90 : 10;
         const bool finished = state->cv.wait_for(
-            lock, std::chrono::seconds(kTestTimeoutSeconds),
+            lock, std::chrono::seconds(testTimeoutSeconds),
             [&state] { return state->done; });
         if (!finished) {
-            error = "测试连接超时（10s），请检查网络或稍后重试";
+            error = "测试连接超时（" + std::to_string(testTimeoutSeconds) +
+                    "s），请检查网络或稍后重试";
             return false;
         }
     }
