@@ -1,0 +1,12 @@
+# 依赖与构建产物由 Dockerfile 内重新安装/生成，避免把宿主 node_modules 拷进镜像
+node_modules/
+dist/
+coverage/
+*.log
+
+# 本地环境变量不进入构建上下文（Docker 构建使用默认 /api/v1 相对路径）
+.env
+.env.*
+!.env.example
+
+.git/

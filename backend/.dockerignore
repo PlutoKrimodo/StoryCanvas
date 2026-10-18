@@ -1,0 +1,13 @@
+# 构建产物与运行时目录
+build/
+logs/
+uploads/
+*.o
+*.d
+
+# 本地密钥文件：镜像内不包含任何明文凭据，运行时由 compose 环境变量注入
+.env
+.env.*
+!.env.example
+
+.git/
