@@ -2,9 +2,14 @@
 
 ## 基于生成式 AI 的儿童绘本智能创作与图像生成系统
 
-**版本**: 1.0  
-**日期**: 2026-09-17  
+**版本**: 1.1  
+**日期**: 2026-10-25  
 **作者**: StoryCanvas 开发团队
+
+> **v1.1 增量（2026-10-25）**：在原有 controller / service / repository 分层上新增
+> `UserAiCredentialController`、`ConversationController`、`GenerationBatchController`、
+> `RateLimitFilter`、`MemberFilter`、`UserAiCredentialService`、`SecretBox`、`RateLimiter`
+> 等；具体文件以 `backend/` 实际目录为准，需求口径见 `docs/01` v2.1 与 `docs/18`。
 
 ---
 

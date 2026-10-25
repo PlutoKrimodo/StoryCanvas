@@ -67,7 +67,7 @@ StoryCanvas 是一个基于生成式 AI 的儿童绘本智能创作与图像生�
 | [Git 项目组织](docs/15-Git项目组织.md) | Git 工作流 |
 | [项目实施方案](docs/16-项目实施方案.md) | **权威实施方案（v2.0，含范围收敛与加密存储设计）** |
 | [前端视觉现代化方案](docs/17-前端视觉现代化方案.md) | 简约油画风主题：设计令牌、共享布局与分步实施切分 |
-| [项目需求确认记录](docs/18-项目需求确认记录.md) | **需求讲解底稿**：需求工程过程、15 条功能需求口径、变更差异（D-1~D-6）、约束（功能边界）与待拍板问题（Q1~Q8） |
+| [项目需求确认记录](docs/18-项目需求确认记录.md) | **需求讲解底稿**：需求工程过程、15 条功能需求 + BYOK / 对话式多图、变更差异（D-1~D-7）、约束（功能边界）与开放问题（Q1~Q9，5 个已落地） |
 | [开发记录](docs/开发记录.md) | **持续更新的开发记录**（Phase 0 起，每阶段追加实现过程与踩坑） |
 
 ---
@@ -268,7 +268,7 @@ StoryCanvas/
 ## 测试
 
 ```bash
-# 运行后端单元测试（GoogleTest，覆盖 utils 层）
+# 运行后端单元测试（GoogleTest，覆盖 utils / DTO / 加密 / 限流层）
 cd backend/build
 cmake .. && make -j"$(nproc)" && ctest --output-on-failure
 
@@ -286,8 +286,10 @@ npx tsc --noEmit && npm test
 ./scripts/verify_m3.sh    # Phase 4 文本解析
 ./scripts/verify_m4.sh    # Phase 5 图像生成闭环
 ./scripts/verify_guest.sh # T-1 游客生成 + 认领（能力层）
+./scripts/verify_quota_split.sh # 游客池 / 登录池额度拆分与 BYOK 豁免
 ./scripts/verify_byok.sh  # BYOK 凭据（需迁移 + ENCRYPTION_KEY）
 ./scripts/verify_chat.sh  # 对话式多图：分镜 → 生成 → 会话 → 整组入绘本
+./scripts/verify_security.sh # 游客写接口 403、限流 429、超限图文案
 ```
 ---
 ## 贡献

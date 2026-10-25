@@ -2,14 +2,17 @@
 
 ## 基于生成式 AI 的儿童绘本智能创作与图像生成系统
 
-**版本**: 2.0  
-**日期**: 2026-09-19  
+**版本**: 2.3  
+**日期**: 2026-10-25  
 **作者**: StoryCanvas 开发团队
 
 > **v2.0 修订**：范围收敛为**用户管理**与**智能图像生成**两大子系统，**在线编辑子系统整体放弃**。
 > 已移除：页面**画布**模块、页面元素模块、图片上传接口。
 >
 > **v2.2 修订**：加回**轻量多页 PDF 导出**（前端 jsPDF + html2canvas 生成，**不设服务端导出接口**）；新增**页容器模块**（§5）用于「保存到绘本」与「读取页列表」。权威方案见 `docs/16-项目实施方案.md`。
+>
+> **v2.3 修订（2026-10-25）**：新增**游客会话**（§2.5）、**BYOK 凭据**（§3.5）、**对话式多图**（§8.6）；
+> 更新权限（403/404）、限流与额度约束（§12）。
 
 ---
 
@@ -185,6 +188,33 @@
 }
 ```
 
+### 2.5 游客会话（Guest-first，T-1）
+
+**POST** `/api/v1/auth/guest`
+
+**描述**: 未登录用户获取游客会话（影子用户 + 游客 Token），用于限额体验生成
+
+**认证**: 无需认证；按 IP 限频 10 次/分钟
+
+**响应**:
+```json
+{
+  "code": 200,
+  "message": "游客会话创建成功",
+  "data": {
+    "guest_id": "uuid",
+    "guest_token": "eyJ...",
+    "quota": 1
+  }
+}
+```
+
+**说明**:
+- 游客 Token 默认 7 天有效，携带 `guest: true` 声明；仅可用于只读与生成接口，
+  绘本创建 / 更新 / 删除与保存页返回 **403**（`MemberFilter`）
+- 注册（`POST /auth/register`）与登录（`POST /auth/login`）可携带 `guest_id`，
+  成功后把游客期间的任务 / 图片 / 绘本归属转移到真实账号
+
 ---
 
 ## 3. 用户模块 (User)
@@ -311,6 +341,33 @@
   }
 }
 ```
+
+### 3.5 用户自带 API Key（BYOK，2026-10-17）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/users/me/ai-credentials` | 概览：llm / image 是否已配置（仅脱敏尾号） |
+| GET | `/api/v1/users/me/ai-credentials/providers` | 预设厂商与默认模型 |
+| PUT | `/api/v1/users/me/ai-credentials/{capability}` | `capability` 为 `llm` 或 `image`；保存或更新 |
+| DELETE | `/api/v1/users/me/ai-credentials/{capability}` | 删除凭据 |
+| POST | `/api/v1/users/me/ai-credentials/test` | 保存前测试（发起一次 1 token 真实探测，10 次/分） |
+
+**PUT 请求体示例**:
+```json
+{
+  "provider": "deepseek",
+  "api_key": "sk-...",
+  "api_base": "",
+  "model": "deepseek-chat"
+}
+```
+
+**规则**:
+- 认证：JWT + `MemberFilter`；游客 403
+- `BYOK_ENABLED=false` 时接口视为不存在（404）；`ENCRYPTION_KEY` 缺失时保存 / 测试返回 503
+- 更新时 `api_key` 留空表示沿用已存 Key（仅限同一厂商）；更换厂商必须重新填写
+- 响应只回显脱敏尾号（如 `sk-****abcd`），不回传完整 Key
+- **LLM 与图像双项都配置**时，该用户任务不占每日额度；只配一项仍计入
 
 ---
 
@@ -850,6 +907,45 @@
 }
 ```
 
+### 8.6 对话式多图（D-7，2026-10-18）
+
+**会话（仅登录用户，挂 `MemberFilter`）**:
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/conversations` | 创建会话（可选 title / style / size） |
+| GET | `/api/v1/conversations` | 会话列表（分页） |
+| GET | `/api/v1/conversations/{id}` | 会话详情与消息 |
+| DELETE | `/api/v1/conversations/{id}` | 删除会话 |
+
+**分镜与批次（登录用户与游客均可用，受额度约束）**:
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/generation/plans` | 创建分镜方案（一次 LLM 调用） |
+| PUT | `/api/v1/generation/plans/{id}` | 提交逐格修改后的分镜 |
+| POST | `/api/v1/generation/batches/{id}/start` | 启动批次（批量创建 N 个任务） |
+| GET | `/api/v1/generation/batches/{id}` | 批次状态与各格结果 |
+| POST | `/api/v1/generation/batches/{id}/cancel` | 取消批次 |
+| POST | `/api/v1/generation/batches/{id}/panels/{index}/regenerate` | 单格重画 |
+
+**创建分镜请求体示例**:
+```json
+{
+  "conversation_id": "uuid（可选）",
+  "text": "小熊在森林里捡到一颗星星……",
+  "image_count": 4,
+  "style": "watercolor",
+  "size": "1024x1024"
+}
+```
+
+**规则**:
+- `image_count` 取 1 / 2 / 4 / 6；普通用户单批最多 6 张，**双项 BYOK** 最多 12 张；游客仅 1 张
+- 批次启动前按图片数**一次性预检额度**，不足直接 429，不产生半批任务
+- N 个任务共享 `parsed_data` / `consistency_prompt` / `seed`；批次状态含 `partial`（部分成功）
+- 游客会话只存内存（重启丢失）；登录用户会话落库
+
 ---
 
 ## 9. 图片模块 (Image)
@@ -997,14 +1093,18 @@
 
 ### 12.2 权限控制
 
-- 用户只能访问自己的资源
-- API 自动验证资源所有权
+- 用户只能访问自己的资源；资源存在但非本人返回 **403**，资源不存在返回 **404**
+- 游客 Token 仅可调用只读与生成接口；绘本写接口与保存页返回 **403**（`MemberFilter`）
+- BYOK 凭据接口仅登录用户可用（游客 403）
 
 ### 12.3 速率限制
 
-- 未认证 API: 100 次/分钟
-- 认证 API: 1000 次/分钟
-- AI 生成 API: 10 次/分钟
+- 匿名（按 IP）: 100 次/分钟
+- 认证（按用户）: 1000 次/分钟
+- AI 生成（创建 / 重新生成 / 分镜 / 批次启动）: 10 次/分钟
+- 游客会话签发（按 IP）: 10 次/分钟
+- BYOK 凭据测试（按用户）: 10 次/分钟
+- 超限统一返回 **429** 与 `Retry-After: 60`
 
 ### 12.4 请求大小限制
 
@@ -1018,8 +1118,17 @@
 - 密码字段仅接收明文输入，服务端 **bcrypt 加盐哈希**后存储；任何接口都不得返回密码或哈希
 - 登录/注册请求体中的 `password` 不写入日志
 - 登录失败统一返回「邮箱或密码错误」，不区分账号是否存在
+- 用户自带 Key（BYOK）仅以 **AES-256-GCM 密文**落库，接口只回显脱敏尾号；
+  `ENCRYPTION_KEY` 缺失时保存 / 测试接口返回 **503**
 - Token 通过 `Authorization` 头传输，不放在 URL 查询参数中
 - 生产环境强制 HTTPS
+
+### 12.6 额度约束（D-2）
+
+- 游客池：所有游客共享每日 20 张（Asia/Shanghai 自然日重置）
+- 登录用户池：所有登录用户共享每日 50 张
+- LLM 与图像**双项 BYOK** 的任务不占每日池；只配一项仍计入
+- 任一池超限返回 **429**，文案区分游客池 / 登录池
 
 ---
 

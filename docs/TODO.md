@@ -133,7 +133,7 @@ Phase 4 (AI 基础) → Phase 5 (生成闭环·核心) → Phase 6 (预览/历�
 
 ### 10. 验收标准（✅ 已达成）
 
-- ✅ 未登录可访问首页 `http://localhost:5173/` 并看到生成器（`pages/home/Home.tsx` + `GuestGenerator`）
+- ✅ 未登录可访问首页 `http://localhost:5173/` 并看到生成器（`pages/home/Home.tsx`）
 - ✅ 未登录可生成 N 张（默认 1），额度用尽后有明确提示（429 文案 + 前端 Alert 引导登录）
 - ✅ 登录后可将匿名结果保存到自己的绘本（认领后任务/图片归属转移到真实用户）
 - ✅ 超额度返回 **429**（`scripts/verify_guest.sh` 第 4 步断言）
