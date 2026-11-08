@@ -1,306 +1,424 @@
 # StoryCanvas
 
-## 基于生成式 AI 的儿童绘本智能创作与图像生成系统
+> 基于生成式 AI 的儿童绘本智能创作与图像生成系统
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 
 ---
 
 ## 项目简介
 
-StoryCanvas 是一个基于生成式 AI 的儿童绘本智能创作与图像生成系统。用户可以通过自然语言描述，利用 AI 技术自动生成绘本插画，并支持生成结果的预览与管理。
+StoryCanvas 是一个面向儿童绘本创作场景的 Web 应用。用户输入一段故事文本后，系统可以生成分镜、批量生成风格一致的插画，并把结果保存为绘本页，最终导出多页 PDF。
 
-### 核心功能
-
-- **用户管理**: 注册、登录、JWT 双 Token 认证与刷新、密码 bcrypt 加密存储
-- **绘本管理**: 创建、查看、更新、删除绘本项目（分页 + 状态筛选 + 归属隔离）
-- **AI 图像生成**: 文本解析（角色/场景/物品/动作/风格）、Prompt 优化、图像生成
-- **用户自带 API Key（BYOK）**: 登录用户可接入自己的 LLM / 图像 Key，选厂商、粘贴 Key、保存验证三步完成；AES-256-GCM 加密入库、脱敏回显，双项配置时免每日额度（游客池 / 登录池）
-- **对话式多图创作**: `/generate` 改为聊天界面，AI 先拆分镜、用户逐格确认后一次生成；普通用户最多 6 张，双项 BYOK 最多 12 张；同批次共享角色设定、风格与 seed，支持单格重画与整组入绘本
-- **任务管理**: 后端内存队列 + 工作线程异步生成，任务状态落库与轮询查询
-- **结果预览**: 生成结果展示、放大、单张下载与重新生成
-- **保存到绘本**: 把生成图按页绑定到绘本（`book_pages.image_id`）
-- **PDF 导出**: 绘本按页合成多页 PDF（含中文页标题）前端生成下载
-- **生成历史**: 历史记录查看与参数复用、多风格选择、尺寸 / 随机种子调优
-- **游客体验（Guest-first）**: 未登录即可生成少量插画（默认 1 张），登录后自动「认领」到账号
-
-> **离线可跑**：AI 服务支持真实厂商（DeepSeek / 豆包·Seedream / 通义万相）与 **Mock 双模式**，
-> 通过 `LLM_PROVIDER` / `IMAGE_PROVIDER` 一键切换；`mock` 会生成真实的 PNG，
-> 因此「解析 → 生成 → 落盘 → 预览 → 导出 PDF」整条链路无外网也能演示。
-
-
-### 技术栈
-
-| 层级 | 技术 |
-|------|------|
-| 前端 | React, TypeScript, Ant Design, Tailwind CSS |
-| 后端 | C++17, Drogon Framework |
-| AI Service | Python, FastAPI |
-| AI 服务商 | DeepSeek（LLM）/ 豆包·Seedream · 通义万相（图像，Mock 可降级） |
-| 数据库 | PostgreSQL |
-| 缓存 | Redis (可选) |
-| 部署 | Docker, Docker Compose |
+系统把「故事构思 → 分镜拆分 → 图像生成 → 结果修正 → 绘本整理」串成一条完整链路，同时提供游客体验、账号体系、用户自带模型密钥（BYOK）、额度控制、接口限流和本地文件存储等能力。
 
 ---
 
-## 项目文档
+## 核心能力
 
-本项目包含完整的设计文档，位于 `docs/` 目录：
+| 能力 | 说明 |
+| --- | --- |
+| 对话式多图创作 | 输入故事后先生成 N 格分镜，用户逐格确认或编辑，再一次性批量生成图片 |
+| 同批次一致性 | 同批次共享角色设定、艺术风格、负向提示与随机种子，减少画面割裂 |
+| 灵活生成额度 | 游客默认 1 张，注册用户单次 1–6 张，双项 BYOK 用户单次最多 12 张 |
+| 单格修正 | 支持单张重画、下载、加入绘本，以及按批次查看进度和失败原因 |
+| 绘本与作品库 | 创建绘本、管理页顺序、绑定生成图、复用历史图片，并导出多页 PDF |
+| 游客优先体验 | 未登录也能体验生成；登录或注册后可认领游客期间产生的资源 |
+| 账号与会话 | 邮箱/用户名注册登录、JWT 双 Token、刷新令牌、密码哈希与用户数据隔离 |
+| BYOK | 用户可配置自己的 LLM / 图像 API Key；密文入库、脱敏回显、保存前连通性校验 |
+| 成本与稳定性 | 游客池/登录池每日额度、接口限流、429 提示、内容合规快速失败、日志不输出明文 Key |
+| 离线 Mock 模式 | 内置 Mock LLM 与 Mock 图像 Provider，可生成真实 PNG，无需外部模型即可跑通完整链路 |
 
-| 文档 | 说明 |
-|------|------|
-| [项目方案总览](docs/00-项目方案总览.md) | 项目整体概述 |
-| [软件需求规格说明书](docs/01-SRS-软件需求规格说明书.md) | 详细需求分析 |
-| [系统总体架构设计](docs/02-系统总体架构设计.md) | 系统架构设计 |
-| [数据库设计](docs/03-数据库设计.md) | 数据库 ER 图和表结构 |
-| [REST API 设计](docs/04-REST-API设计.md) | 完整 API 接口设计 |
-| [C++ 后端项目结构](docs/05-CppBackend项目结构.md) | 后端架构设计 |
-| [Python AI Service 结构](docs/06-PythonAIService结构.md) | AI 服务架构设计 |
-| [前端架构设计](docs/07-前端架构设计.md) | 前端架构设计 |
-| [AI 异步任务机制](docs/08-AI异步任务机制.md) | 异步任务设计 |
-| [文件存储方案](docs/09-文件存储方案.md) | 文件存储设计 |
-| [安全机制设计](docs/10-安全机制设计.md) | 安全机制设计 |
-| [测试方案](docs/11-测试方案.md) | 测试策略和用例 |
-| [开发阶段与 MVP 规划](docs/12-开发阶段与MVP规划.md) | 开发计划 |
-| [课程报告与演示](docs/13-课程报告与演示.md) | 报告结构和演示流程 |
-| [WSL 开发环境](docs/14-WSL开发环境.md) | 开发环境搭建 |
-| [Git 项目组织](docs/15-Git项目组织.md) | Git 工作流 |
-| [项目实施方案](docs/16-项目实施方案.md) | **权威实施方案（v2.0，含范围收敛与加密存储设计）** |
-| [前端视觉现代化方案](docs/17-前端视觉现代化方案.md) | 简约油画风主题：设计令牌、共享布局与分步实施切分 |
-| [项目需求确认记录](docs/18-项目需求确认记录.md) | **需求讲解底稿**：需求工程过程、15 条功能需求 + BYOK / 对话式多图、变更差异（D-1~D-7）、约束（功能边界）与开放问题（Q1~Q9，5 个已落地） |
-| [开发记录](docs/开发记录.md) | **持续更新的开发记录**（Phase 0 起，每阶段追加实现过程与踩坑） |
+---
+
+## 工作流程
+
+```mermaid
+flowchart LR
+  U[用户] -->|故事文本| FE[React 前端]
+  FE -->|/api/v1 请求| BE[C++ Drogon 后端]
+  BE -->|分镜规划与生成请求| AI[Python FastAPI AI 服务]
+  AI -->|文本模型| LLM[DeepSeek 或用户 LLM Key]
+  AI -->|图像模型| IMG[豆包 Seedream / 通义万相 / 用户图像 Key]
+  AI -->|图片字节或 URL| BE
+  BE -->|用户 / 会话 / 任务 / 绘本数据| PG[(PostgreSQL)]
+  BE -->|生成图片| FS[(本地文件存储)]
+  BE -->|限流 / 额度 / JWT / 加密| SEC[安全与成本策略]
+  BE -->|进度与结果| FE
+  FE -->|保存绘本页 / 导出 PDF| U
+```
+
+系统采用模块化单体架构：
+
+- **前端**：React + TypeScript，负责创作交互、进度轮询、结果预览、绘本页与 PDF 导出；
+- **后端**：C++17 + Drogon，负责认证、业务编排、额度控制、任务状态、凭据加密与文件访问；
+- **AI 服务**：Python + FastAPI，负责分镜拆分、Prompt 优化、Provider 适配与图像生成；
+- **数据层**：PostgreSQL 保存结构化数据，本地 `storage/` 保存生成图片，Redis 作为可选缓存组件；
+- **接入层**：Nginx 可选作为统一反向代理，容器环境由 Docker Compose 编排。
+
+---
+
+## 技术栈
+
+| 层级 | 技术 |
+| --- | --- |
+| 前端 | React 18, TypeScript, Vite, Ant Design, Tailwind CSS, Zustand, jsPDF, html2canvas |
+| 后端 | C++17, Drogon, CMake, OpenSSL, JWT, bcrypt, libpq |
+| AI 服务 | Python 3.10+, FastAPI, Pydantic, httpx, pytest |
+| 数据库 | PostgreSQL 15 |
+| 缓存 | Redis 7（可选） |
+| 文件存储 | 本地目录 `storage/`，按用户与绘本分层 |
+| AI 文本模型 | DeepSeek, OpenAI Compatible / BYOK, Mock |
+| AI 图像模型 | 豆包·Seedream, 通义万相, BYOK, Mock |
+| 测试 | GoogleTest / ctest, pytest, Vitest, React Testing Library |
+| 部署 | Docker, Docker Compose, Nginx |
 
 ---
 
 ## 快速开始
 
-### 环境要求
+### 1. 环境要求
 
-- WSL 2 + Ubuntu 22.04
+- Linux 或 WSL2 Ubuntu 22.04
 - GCC/G++ 11+
 - CMake 3.16+
 - Python 3.10+
 - Node.js 18+
-- PostgreSQL 15
-- Docker (可选)
+- Docker 与 Docker Compose 插件
+- PostgreSQL 15（使用容器时由 Compose 提供）
+- Redis 7（可选，使用容器时由 Compose 提供）
 
-### 开发环境搭建
+### 2. 克隆与初始化
 
 ```bash
-# 1. 克隆项目
-git clone https://github.com/your-username/StoryCanvas.git
+git clone https://github.com/PlutoKrimodo/StoryCanvas.git
 cd StoryCanvas
 
-# 2. 运行环境搭建脚本
-chmod +x scripts/setup.sh
+chmod +x scripts/*.sh
 ./scripts/setup.sh
-
-# 3. 配置环境变量（至少填写 DB_PASSWORD / JWT_SECRET / AI_SERVICE_API_KEY）
-cp .env.example .env
-# 用 openssl rand 生成随机密钥填入，不要沿用示例值
-# 注意：STORAGE_PATH 需让后端与 AI 服务指向同一目录（模板已统一为 ../storage）
-
-# AI Service 读取自己目录下的 .env（服务商密钥在这里配置）
-cp ai-service/.env.example ai-service/.env
-
-# 4. 启动数据库
-docker-compose up -d postgres redis
-
-# 5. 初始化数据库
-psql -h localhost -U storycanvas -d storycanvas -f sql/init.sql
-
-# 5.5 已有数据库（非全新）需执行增量迁移，补齐游客功能需要的 users.is_guest 列
-psql -h localhost -U storycanvas -d storycanvas -f sql/migrate_guest.sql
-
-# 6. 启动后端（构建产物名为 storycanvas_backend）
-cd backend
-cp ../.env .env                          # 后端在 backend/ 下读取 .env
-mkdir -p build && cd build
-cmake .. && make -j$(nproc)
-cd .. && ./build/storycanvas_backend     # http://localhost:8080/health
-
-# 7. 启动 AI Service
-cd ai-service
-source venv/bin/activate
-python -m venv venv && ./venv/bin/pip install -r requirements.txt   # 首次
-python main.py                           # http://localhost:8000/api/v1/health/
-# 演示故障兜底（无需外网）：LLM_PROVIDER=mock IMAGE_PROVIDER=mock python main.py
-
-# 8. 启动前端
-cd frontend
-npm install
-npm run dev                              # http://localhost:5173
 ```
 
-### 用户自带 API Key（BYOK）
+`scripts/setup.sh` 会完成：
 
-登录后进入「个人中心 → 我的 AI API Key」，三步即可接入：
+- 生成根目录 `.env` 和 `ai-service/.env`；
+- 自动生成 `ENCRYPTION_KEY`（需要本机安装 `openssl`）；
+- 启用 `.githooks` 中的密钥扫描钩子；
+- 创建 `backend/build` 并执行 CMake 配置；
+- 创建 Python 虚拟环境并安装 AI 服务依赖；
+- 安装前端依赖；
+- 创建 `storage/`、`logs/`、`nginx/ssl/` 等运行目录。
 
-1. 选择厂商（默认 DeepSeek / 豆包·Seedream，也可选 OpenAI、通义千问、智谱 GLM）；
-2. 粘贴 API Key；Base URL 与推荐模型会自动带出，只有自定义厂商才需要展开「高级设置」；
-3. 点击「保存并验证」：LLM 用 1 token 真实探测，图像仅做格式校验（避免计费）。
+随后编辑根目录 `.env`，至少填写：
 
-说明：
+```text
+DB_PASSWORD=
+JWT_SECRET=
+AI_SERVICE_API_KEY=
+ENCRYPTION_KEY=
+```
 
-- Key 仅以 **AES-256-GCM 密文**入库，接口只回显 `sk-****abcd`，前端不持久化；
-- **双项都配置**时，该用户的任务不占每日额度（游客池 `GUEST_DAILY_GENERATION_CAP` / 登录池 `USER_DAILY_GENERATION_CAP`）；只配一项仍照常计入；
-- 已配置的能力调用失败时任务直接失败并提示更新 Key，**不会静默回退系统 Key**；
-- 需要在 `.env` 配置 `ENCRYPTION_KEY`（`./scripts/setup.sh` 首次创建 `.env` 时会自动生成）；
-- 存量数据库需依次执行：`sql/migrate_byok.sql`、`sql/migrate_conversation.sql`；
-- 故障回滚：设置 `BYOK_ENABLED=false` 并重启后端，所有请求回到系统 Key。
+其中：
 
-### 对话式多图创作
+- `JWT_SECRET` 可用 `openssl rand -hex 32` 生成；
+- `ENCRYPTION_KEY` 可用 `openssl rand -base64 32` 生成，`setup.sh` 通常已自动生成；
+- `AI_SERVICE_API_KEY` 是后端访问 AI 服务的内部鉴权密钥，需要与 `ai-service/.env` 中的 `INTERNAL_API_KEY` 保持一致；
+- 根目录 `.env` 与 `ai-service/.env` 都是本地配置，不应进入版本库。
 
-`/generate` 是对话式创作页：
+### 3. 使用 Docker Compose 启动
 
-1. 输入连续故事，选择风格、尺寸与张数（1/2/4/6；游客仅 1 张）；
-2. AI 先返回 N 格分镜，用户可逐格编辑；确认前不会产生图像费用；
-3. 确认后一次生成 N 张，同批次共享角色设定、风格、负向提示与 seed；
-4. 每张图可单独下载 / 加入绘本 / 重画，整组可按顺序写入绘本连续页；
-5. 登录用户的会话与分镜持久化，可在右上角「历史」抽屉回看续画；游客仅保留当前页面内存。
-
-存量数据库需执行 `sql/migrate_conversation.sql`。旧 `POST /generation` 单张接口仍保留，历史任务不受影响。
-
-### Docker 部署
+若尚未运行 `scripts/setup.sh`，先复制配置模板：
 
 ```bash
-# 构建并启动所有服务
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
-
-# 停止服务
-docker-compose down
+cp .env.example .env
+cp ai-service/.env.example ai-service/.env
 ```
+
+按上节说明填写必填变量后启动：
+
+```bash
+docker compose up -d --build
+```
+
+> 旧版环境若没有 `docker compose` 子命令，可使用 `docker-compose up -d --build`。
+
+常用操作：
+
+```bash
+docker compose ps
+docker compose logs -f
+docker compose down
+```
+
+默认访问入口：
+
+| 服务 | 地址 |
+| --- | --- |
+| 前端 | `http://localhost:5173` |
+| 后端健康检查 | `http://localhost:8080/health` |
+| AI 服务健康检查 | `http://127.0.0.1:8000/api/v1/health/` |
+| Nginx 反向代理（可选） | `http://localhost` |
+
+`nginx` 服务默认监听 80 端口；HTTPS 段在 `nginx/nginx.conf` 中默认注释，放入证书后可自行启用。
+
+### 4. 本地开发启动
+
+如需分别启动三端并观察日志，可使用：
+
+```bash
+./scripts/start_all.sh --rebuild --open
+```
+
+常用参数：
+
+```text
+--no-ai           不启动 AI 服务
+--no-frontend     不启动前端
+--rebuild         强制重新构建后端
+--init-db         用 psql 执行 sql/init.sql
+--verify          启动后运行基础链路自检
+--open            尝试自动打开浏览器
+--down            停止 Compose 服务
+```
+
+手动启动时的端口与 Compose 一致：
+
+- 后端：`http://localhost:8080`
+- AI 服务：`http://127.0.0.1:8000`
+- 前端：`http://localhost:5173`
+
+若使用已有数据库，请按 `sql/` 下的迁移脚本补齐 BYOK、会话、页图片、额度拆分与任务状态等字段。
+
+---
+
+## 配置说明
+
+### 根目录 `.env`
+
+根目录 `.env.example` 是公共配置模板，主要变量如下：
+
+| 类别 | 变量 | 说明 |
+| --- | --- | --- |
+| 数据库 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | PostgreSQL 连接配置 |
+| JWT | `JWT_SECRET`, `JWT_ACCESS_TOKEN_EXPIRY`, `JWT_REFRESH_TOKEN_EXPIRY` | 访问令牌、刷新令牌与签名密钥 |
+| 游客 | `GUEST_GENERATION_QUOTA`, `GUEST_DAILY_GENERATION_CAP` | 游客个人额度与游客池每日额度 |
+| 登录用户 | `USER_DAILY_GENERATION_CAP` | 所有登录用户共享的每日额度 |
+| 限流 | `RATE_LIMIT_ENABLED`, `RATE_LIMIT_*_PER_MIN` | 匿名、认证、生成、游客会话、凭据测试等限流档位 |
+| BYOK | `BYOK_ENABLED`, `ENCRYPTION_KEY` | BYOK 开关与用户 API Key 加密主密钥 |
+| 内部调用 | `AI_SERVICE_URL`, `AI_SERVICE_API_KEY`, `AI_SERVICE_TIMEOUT` | 后端调用 AI 服务的地址、鉴权与超时 |
+| 系统模型 | `LLM_PROVIDER`, `IMAGE_PROVIDER`, `DEEPSEEK_API_KEY`, `ARK_API_KEY`, `DASHSCOPE_API_KEY` | 未使用 BYOK 或 BYOK 关闭时的系统 Provider 配置 |
+| 文件 | `STORAGE_PATH` | 后端与 AI 服务共享的图片目录，两者必须指向同一位置 |
+| 端口 | `BACKEND_PORT`, `AI_SERVICE_PORT`, `FRONTEND_PORT` | 默认分别为 8080 / 8000 / 5173 |
+
+`docker-compose.yml` 对密钥类变量使用 `${VAR:?}` 约束：缺少 `DB_PASSWORD`、`JWT_SECRET` 或 `AI_SERVICE_API_KEY` 时会直接拒绝启动；`.env.example` 中的 `change_me` 一类占位值也必须替换为随机值。
+
+### AI 服务 `.env`
+
+`ai-service/.env.example` 用于本地直接启动 AI 服务，主要包含：
+
+- `LLM_PROVIDER`：`deepseek` / `mock`
+- `IMAGE_PROVIDER`：`doubao` / `wanx` / `mock`
+- `DEEPSEEK_API_KEY`、`ARK_API_KEY`、`DASHSCOPE_API_KEY`：系统模型密钥
+- `INTERNAL_API_KEY`：与根目录 `AI_SERVICE_API_KEY` 保持一致
+- `STORAGE_PATH`：与后端共享同一目录
+- `MOCK_IMAGE_DELAY`：Mock 图像生成延迟，便于观察进度轮询
+
+Docker Compose 会直接把根目录 `.env` 中的变量注入 AI 服务容器；本地单独运行 AI 服务时才需要维护 `ai-service/.env`。
+
+### 离线 Mock 模式
+
+无需外部模型密钥即可运行：
+
+```bash
+LLM_PROVIDER=mock IMAGE_PROVIDER=mock
+```
+
+Mock LLM 返回结构化分镜，Mock 图像 Provider 会生成真实 PNG 文件，因此「故事 → 分镜 → 图片 → 落盘 → 预览 → 保存绘本 → 导出 PDF」整条链路都可以在本地闭环。
+
+---
+
+## 用户自带 API Key（BYOK）
+
+登录用户可在「个人中心 → 我的 AI API Key」配置自己的 LLM 与图像模型密钥。
+
+接入流程：
+
+1. 选择厂商，例如 DeepSeek、豆包·Seedream、OpenAI Compatible、通义千问、智谱 GLM 等；
+2. 粘贴 API Key；Base URL 与推荐模型由服务端目录自动带出，自定义厂商可展开高级设置；
+3. 点击「保存并验证」，验证成功后才会保存。
+
+当前连通性校验行为：
+
+| 能力 | 校验方式 |
+| --- | --- |
+| LLM | 发起一次 `max_tokens=1` 的真实探测 |
+| 图像 | 生成一张 1K 测试图完成连通性校验，通常会计费一次；测试图不落盘、不下载 |
+
+安全与额度规则：
+
+- Key 以 **AES-256-GCM 密文**入库，接口只回显 `sk-****abcd` 一类脱敏信息；
+- 前端不持久化明文 Key，日志不记录请求体、请求头或厂商原始响应；
+- 双项 BYOK 都配置时，该用户任务不占游客池/登录池每日额度；
+- 只配置一项时，未配置的能力仍走系统 Key，任务照常计入额度；
+- 已配置能力调用失败时任务直接失败并提示更新 Key，不静默回退系统 Key；
+- `ENCRYPTION_KEY` 未配置时，保存与测试接口不可用；
+- 轮换 `ENCRYPTION_KEY` 会导致旧密文无法解密，用户需要重新保存 Key；
+- 设置 `BYOK_ENABLED=false` 可关闭整套 BYOK 接口并让所有请求回到系统 Key。
+
+---
+
+## 对话式多图创作
+
+1. 输入连续故事，选择风格、尺寸与张数；游客仅 1 张，注册用户 1–6 张，双项 BYOK 最多 12 张；
+2. AI 先返回 N 格分镜，用户可逐格编辑；确认前不会产生图像费用；
+3. 确认后一次生成 N 张，同批次共享角色设定、风格、负向提示与 seed；
+4. 每张图可单独下载、加入绘本或重画，整组可按顺序写入绘本连续页；
+5. 登录用户的会话与分镜持久化，可在历史抽屉回看续画；游客仅保留当前页面内存。
+
+旧 `POST /generation` 单图接口仍保留，历史任务不受影响。
+
+---
+
+## API 概览
+
+- Base URL：`http://localhost:8080/api/v1`
+- 认证方式：JWT Bearer Token
+- 通用响应：`{ "code": 200, "message": "success", "data": {} }`
+
+| 模块 | 典型接口 | 说明 |
+| --- | --- | --- |
+| 认证 | `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` | 注册、登录、刷新与退出 |
+| 游客 | `/auth/guest`, 登录/注册时携带 `guest_id` | 游客会话与产物认领 |
+| 用户 | `/users/me` | 用户信息与密码管理 |
+| BYOK | `/users/me/ai-credentials` | 凭据概览、厂商目录、保存、删除与测试 |
+| 绘本 | `/books` | 绘本创建、列表、详情、更新与删除 |
+| 页容器 | `/books/{id}/pages` | 生成图绑定到页、页列表与页顺序 |
+| 会话 | `/conversations` | 创作会话与消息历史 |
+| 分镜 | `/generation/plans` | 创建与更新分镜方案 |
+| 批次 | `/generation/batches` | 启动批次、查询进度、取消批次、单格重画 |
+| 图片 | `/images` | 图片信息、下载、删除与列表 |
+| 健康检查 | `/health` | 服务健康状态 |
+
+完整接口字段、状态码与安全要求见 [REST API 设计](docs/04-REST-API设计.md)。
 
 ---
 
 ## 项目结构
 
-```
+```text
 StoryCanvas/
-├── docs/                    # 项目文档（权威实施方案见 docs/16）
-├── backend/                 # C++ 后端
-│   ├── controllers/         #   控制器
+├── backend/                 # C++17 / Drogon 后端
+│   ├── controllers/         #   HTTP 控制器
 │   ├── services/            #   业务逻辑层
 │   ├── repositories/        #   数据访问层
 │   ├── models/              #   数据模型
-│   ├── filters/             #   CORS 等过滤器
-│   ├── utils/               #   配置 / JWT / 密码哈希 / 加密工具
-│   └── config/config.json   #   仅非敏感默认值，密钥走环境变量
-├── ai-service/              # Python AI Service（文本解析 / Prompt 优化 / 图像生成）
-│   ├── app/providers/       #   LLM（DeepSeek/Mock）与图像（豆包/通义万相/Mock）Provider
-│   ├── app/services/        #   文本分析 / Prompt 优化 / 图像生成 / 一站式编排
-│   ├── app/prompts/         #   分析 Prompt 与 5 套风格模板
+│   ├── filters/             #   CORS、JWT、限流等过滤器
+│   ├── utils/               #   配置、JWT、密码、加密、限流工具
+│   ├── tests/               #   GoogleTest 单元测试
+│   └── config/config.json   #   非敏感默认值
+├── ai-service/              # Python / FastAPI AI 服务
+│   ├── app/api/             #   HTTP 接口
+│   ├── app/services/        #   文本分析、Prompt 优化、图像生成编排
+│   ├── app/providers/       #   LLM / 图像 / Mock / BYOK Provider
+│   ├── app/prompts/         #   Prompt 与风格模板
 │   └── tests/               #   pytest 单元测试
-├── frontend/                # React 前端
-│   └── src/                 #   api / stores / hooks / components(ai,book) / pages / utils
-├── sql/init.sql             # 数据库初始化脚本
-├── scripts/                 # 环境初始化与验收脚本
-│   ├── setup.sh             #   环境初始化
-│   ├── verify_m1..m4.sh     #   Phase 2 / 3 / 4 / 5 验收脚本
-│   └── start_all.sh         #   一键启动本地三端
-├── nginx/nginx.conf         # 反向代理配置（HTTPS 段默认注释）
-├── storage/                 # 生成结果（后端与 AI 服务共享；按 users/{uid}/books/{bid}/ 分层）
+├── frontend/                # React / TypeScript 前端
+│   └── src/                 #   api / stores / hooks / components / pages / theme / utils
+├── nginx/                   # 可选反向代理配置
+├── sql/                     # 初始化与增量迁移脚本
+├── scripts/                 # 初始化、启动与自检脚本
+├── docs/                    # 架构、接口、数据库、安全与测试文档
+├── storage/                 # 本地生成图片
 ├── docker-compose.yml       # 容器编排
-└── .env.example             # 环境变量模板（公共配置唯一来源）
+├── .env.example             # 根目录环境变量模板
+└── README.md
 ```
 
 ---
 
-## 开发阶段
+## 详细文档
 
-| 阶段 | 内容 | 状态 | 时间 |
-|------|------|------|------|
-| Phase 0 | 环境搭建 | ✅ 已完成 | 1-2 天 |
-| Phase 1 | 项目骨架 | ✅ 已完成 | 2-3 天 |
-| Phase 2 | 用户系统（含加密存储） | ✅ 已完成 | 3-4 天 |
-| Phase 3 | 绘本管理 | ✅ 已完成 | 2-3 天 |
-| Phase 4 | AI Service 基础（文本解析） | ✅ 已完成 | 3-4 天 |
-| Phase 5 | AI 图像生成（核心） | ✅ 已完成 | 3-4 天 |
-| Phase 6 | 生成预览与历史 | ✅ 已完成 | 2-3 天 |
-| Phase 10 | 测试完善 | ⬜ 未开始 | 3-4 天 |
-| Phase 11 | Docker 部署 | ⬜ 未开始 | 1-2 天 |
-| Phase 12 | 课程报告 | ⬜ 未开始 | 3-5 天 |
-
-**总时间估算**: 约 20-29 天（精简 MVP 10-12 天）
-
-> 原 Phase 6 在线编辑器、Phase 7 多页绘本已放弃（属在线编辑子系统）；**PDF 导出以「轻量多页（前端生成）」形式加回**。权威排期见 [项目实施方案](docs/16-项目实施方案.md)。
-
----
-
-## MVP 功能
-
-### 必须实现（✅ 已完成）
-
-- 用户注册/登录/登出
-- JWT 认证与 Token 刷新
-- 用户信息与密码管理（bcrypt 加密存储）
-- 创建绘本、查看绘本列表与详情
-- AI 文本解析与 Prompt 优化
-- AI 图像生成（真实厂商 + Mock 降级）
-- 用户自带 API Key（BYOK，LLM + 图像）
-- 对话式多图创作（分镜确认 + 批次生成）
-- 生成结果预览
-- 重新生成 / 取消任务
-- 保存到绘本（页容器绑定 `image_id`）
-- PDF 导出（轻量多页，前端生成）
-
-### 加分项（✅ 已完成，Phase 6）
-
-- 生成历史（列表 + 参数复用）
-- 多艺术风格（5 套风格模板）
-- 参数调优面板（尺寸 / 随机种子）
-- 单张图片下载
-
-### 范围追加（✅ 已完成，T-1）
-
-- 游客优先（Guest-first）：未登录生成少量图片 + 登录认领（`docs/TODO.md` T-1）
-
-### 第二阶段（未开始）
-
-- 角色管理与角色一致性生成
-- Redis 任务队列、并发与性能压测
+| 文档 | 内容 |
+| --- | --- |
+| [项目方案总览](docs/00-项目方案总览.md) | 项目定位、范围与整体方案 |
+| [软件需求规格说明书](docs/01-SRS-软件需求规格说明书.md) | 功能需求、质量需求与约束 |
+| [系统总体架构设计](docs/02-系统总体架构设计.md) | 分层架构、模块职责与部署视图 |
+| [数据库设计](docs/03-数据库设计.md) | ER 图、表结构、索引与约束 |
+| [REST API 设计](docs/04-REST-API设计.md) | 接口路径、请求响应、错误码与安全要求 |
+| [C++ 后端项目结构](docs/05-CppBackend项目结构.md) | 后端目录与分层设计 |
+| [Python AI Service 结构](docs/06-PythonAIService结构.md) | AI 服务模块与 Provider 设计 |
+| [前端架构设计](docs/07-前端架构设计.md) | 前端页面、状态与组件设计 |
+| [AI 异步任务机制](docs/08-AI异步任务机制.md) | 任务状态、轮询、失败与重试策略 |
+| [文件存储方案](docs/09-文件存储方案.md) | 图片落盘路径、访问与清理策略 |
+| [安全机制设计](docs/10-安全机制设计.md) | 认证、授权、加密、限流与输入安全 |
+| [测试方案](docs/11-测试方案.md) | 测试分层、工具与用例 |
+| [WSL 开发环境](docs/14-WSL开发环境.md) | 本地开发环境说明 |
+| [Git 项目组织](docs/15-Git项目组织.md) | Git 工作流与钩子约定 |
+| [项目实施方案](docs/16-项目实施方案.md) | 详细实现方案与约束说明 |
+| [前端视觉现代化方案](docs/17-前端视觉现代化方案.md) | 设计令牌、主题与视觉规范 |
 
 ---
 
 ## 测试
 
 ```bash
-# 运行后端单元测试（GoogleTest，覆盖 utils / DTO / 加密 / 限流层）
+# 后端单元测试
 cd backend/build
 cmake .. && make -j"$(nproc)" && ctest --output-on-failure
 
-# 运行 AI Service 单元测试（pytest）
-cd ai-service
+# AI 服务单元测试
+cd ../../ai-service
 ./venv/bin/python -m pytest
 
-# 运行前端类型检查与单元测试
-cd frontend
-npx tsc --noEmit && npm test
-
-# 端到端验收脚本（需三端已启动）
-./scripts/verify_m1.sh    # Phase 2 用户系统
-./scripts/verify_m2.sh    # Phase 3 绘本管理
-./scripts/verify_m3.sh    # Phase 4 文本解析
-./scripts/verify_m4.sh    # Phase 5 图像生成闭环
-./scripts/verify_guest.sh # T-1 游客生成 + 认领（能力层）
-./scripts/verify_quota_split.sh # 游客池 / 登录池额度拆分与 BYOK 豁免
-./scripts/verify_byok.sh  # BYOK 凭据（需迁移 + ENCRYPTION_KEY）
-./scripts/verify_chat.sh  # 对话式多图：分镜 → 生成 → 会话 → 整组入绘本
-./scripts/verify_security.sh # 游客写接口 403、限流 429、超限图文案
+# 前端类型检查与组件测试
+cd ../frontend
+npm run typecheck && npm test
 ```
+
+服务启动后可按需运行端到端自检脚本：
+
+```bash
+./scripts/verify_m1.sh            # 用户与鉴权链路
+./scripts/verify_m2.sh            # 绘本管理链路
+./scripts/verify_m3.sh            # 文本解析链路
+./scripts/verify_m4.sh            # 图像生成链路
+./scripts/verify_guest.sh         # 游客生成与认领
+./scripts/verify_quota_split.sh   # 游客池 / 登录池额度拆分
+./scripts/verify_byok.sh          # BYOK 凭据与加密
+./scripts/verify_chat.sh          # 对话式多图与整组入绘本
+./scripts/verify_security.sh      # 写接口权限、限流与超限提示
+```
+
 ---
+
+## 安全说明
+
+- `.env`、真实 API Key、日志、`storage/` 中的生成资源与本地 CLI 状态文件不进入版本库；
+- `.githooks/pre-commit` 与 `.githooks/pre-push` 会在提交与推送前扫描疑似密钥；
+- 密码使用 bcrypt 哈希，会话使用 JWT 双 Token；
+- 用户 BYOK Key 使用 AES-256-GCM 信封加密，密文绑定用户与能力；
+- 自定义 Base URL 会校验 HTTPS、端口、userinfo、查询参数与公网地址，降低 SSRF 风险；
+- 登录、游客会话、生成、重画与凭据测试均有独立限流档位；
+- 内容合规失败快速返回可读原因，不自动重试；
+- 双项 BYOK 任务不计入系统 Key 额度；失败任务仍按快照保留额度归属。
+
+---
+
 ## 贡献
 
-欢迎提交 Issue 和 Pull Request！
+欢迎通过 Issue 和 Pull Request 参与改进。
+
+贡献前请确认：
+
+- 不提交 `.env`、真实厂商 Key、用户 BYOK Key、证书、日志或生成图片；
+- 后端、AI 服务与前端相关测试可通过；
+- 涉及接口变更时同步更新 `docs/04-REST-API设计.md`；
+- 涉及数据模型变更时补充 `sql/` 下的迁移脚本。
 
 ---
 
 ## 许可证
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情
+本项目采用 MIT 许可证。
 
 ---
 
@@ -310,3 +428,5 @@ npx tsc --noEmit && npm test
 - [FastAPI](https://fastapi.tiangolo.com/)
 - [React](https://react.dev/)
 - [Ant Design](https://ant.design/)
+- [PostgreSQL](https://www.postgresql.org/)
+- [Docker](https://www.docker.com/)
