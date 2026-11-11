@@ -62,7 +62,32 @@ TEST(EncryptionUtilsTest, RandomHexHasExpectedLengthAndUniqueness) {
 TEST(EncryptionUtilsTest, MaskSecretHidesMiddle) {
     EXPECT_EQ(EncryptionUtils::maskSecret(""), "");
     EXPECT_EQ(EncryptionUtils::maskSecret("short"), "****");
-    EXPECT_EQ(EncryptionUtils::maskSecret("abcdefghijkl"), "abcd****ijkl");
+    // 12 字符及以下全部隐藏，避免短 Key 暴露首尾 8 个字符。
+    EXPECT_EQ(EncryptionUtils::maskSecret("abcdefghijkl"), "****");
+    EXPECT_EQ(EncryptionUtils::maskSecret("sk-1234567890abcdef"), "sk-1****cdef");
+}
+
+TEST(EncryptionUtilsTest, RejectsWeakOrPlaceholderEncryptionKeys) {
+    std::string error;
+
+    EXPECT_FALSE(EncryptionUtils::isUsableKey("", error));
+    EXPECT_FALSE(error.empty());
+
+    EXPECT_FALSE(EncryptionUtils::isUsableKey("short-secret", error));
+    EXPECT_FALSE(error.empty());
+
+    EXPECT_FALSE(EncryptionUtils::isUsableKey("change_me_please", error));
+    EXPECT_FALSE(error.empty());
+
+    EXPECT_FALSE(EncryptionUtils::isUsableKey("your_encryption_key", error));
+    EXPECT_FALSE(error.empty());
+
+    EXPECT_TRUE(EncryptionUtils::isUsableKey(EncryptionUtils::generateKey(), error));
+    EXPECT_TRUE(error.empty());
+
+    EXPECT_TRUE(EncryptionUtils::isUsableKey(
+        "0123456789abcdef0123456789abcdef", error));
+    EXPECT_TRUE(error.empty());
 }
 
 TEST(EncryptionUtilsTest, ConstantTimeEqualsMatchesSemantics) {

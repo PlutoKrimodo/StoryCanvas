@@ -21,6 +21,7 @@ add_executable(storycanvas_tests
     test_encryption_utils.cpp
     test_secret_box.cpp
     test_ai_credential_rules.cpp
+    test_ai_credential_ticket.cpp
     test_conversation_dto.cpp
     test_auth_dto.cpp
     test_file_utils.cpp

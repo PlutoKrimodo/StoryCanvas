@@ -53,6 +53,8 @@ export interface SaveCredentialPayload {
   api_key?: string
   api_base?: string
   model?: string
+  /** POST /test 成功后的短期验证票据；PUT 保存必须携带 */
+  verification_token?: string
 }
 
 export interface CredentialTestRequest extends SaveCredentialPayload {
@@ -64,4 +66,7 @@ export interface CredentialTestResult {
   verified: boolean
   latency_ms: number
   message: string
+  /** 仅 ok && verified 时返回，供随后的 PUT 保存使用 */
+  verification_token?: string
+  expires_in?: number
 }

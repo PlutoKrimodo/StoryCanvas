@@ -40,6 +40,8 @@ TEST(SecretBoxTest, RejectsTamperedCiphertext) {
 TEST(SecretBoxTest, RequiresEncryptionKey) {
     EXPECT_THROW(SecretBox::seal(kUser, "llm", "sk-test-1234567890", ""), std::runtime_error);
     EXPECT_FALSE(SecretBox::hasKey(""));
+    EXPECT_FALSE(SecretBox::hasKey("short-secret"));
+    EXPECT_FALSE(SecretBox::hasKey("change_me_please"));
     EXPECT_TRUE(SecretBox::hasKey(kKey));
 }
 

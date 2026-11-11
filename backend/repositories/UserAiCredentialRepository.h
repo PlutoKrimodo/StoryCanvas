@@ -23,6 +23,12 @@ public:
     /** 新增或更新（唯一键 user_id + capability）；成功后回填 id / 时间戳。 */
     static bool upsert(UserAiCredential &credential);
 
-    /** 删除；返回是否确实删除了一行。 */
-    static bool remove(const std::string &userId, const std::string &capability);
+    enum class RemoveResult {
+        Removed,
+        NotFound,
+        Error,
+    };
+
+    /** 删除；区分成功、不存在和数据库错误，避免服务层假成功。 */
+    static RemoveResult remove(const std::string &userId, const std::string &capability);
 };

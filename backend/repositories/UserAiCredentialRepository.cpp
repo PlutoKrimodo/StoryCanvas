@@ -82,16 +82,17 @@ bool UserAiCredentialRepository::upsert(UserAiCredential &credential) {
     }
 }
 
-bool UserAiCredentialRepository::remove(const std::string &userId,
-                                        const std::string &capability) {
+UserAiCredentialRepository::RemoveResult UserAiCredentialRepository::remove(
+    const std::string &userId,
+    const std::string &capability) {
     try {
         auto db = drogon::app().getDbClient();
         auto result = db->execSqlSync(
             "DELETE FROM user_ai_credentials WHERE user_id = $1 AND capability = $2",
             userId, capability);
-        return result.affectedRows() > 0;
+        return result.affectedRows() > 0 ? RemoveResult::Removed : RemoveResult::NotFound;
     } catch (const std::exception &e) {
         spdlog::error("删除用户 AI 凭据失败: {}", e.what());
-        return false;
+        return RemoveResult::Error;
     }
 }

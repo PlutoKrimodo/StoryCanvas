@@ -21,6 +21,7 @@ export interface AiCredentialFormProps {
   advancedOpen: boolean
   testing: boolean
   saving: boolean
+  encryptionReady: boolean
   testResult: CredentialTestResult | null
   formError: string
   onProviderChange: (value: string) => void
@@ -50,6 +51,7 @@ function AiCredentialForm(props: AiCredentialFormProps) {
     advancedOpen,
     testing,
     saving,
+    encryptionReady,
     testResult,
     formError,
   } = props
@@ -182,7 +184,7 @@ function AiCredentialForm(props: AiCredentialFormProps) {
                   ? capability === 'image'
                     ? `已用 1 张 1K 测试图验证，耗时 ${testResult.latency_ms}ms（会计费一次）`
                     : `已用 1 token 真实探测，耗时 ${testResult.latency_ms}ms`
-                  : '配置格式有效，将在首次生成时验证'
+                  : '服务端未完成验证，不能保存；请检查配置后重试。'
                 : '未通过验证，不会保存；请修正 Key 或网络后重试。'
             }
           />
@@ -199,6 +201,7 @@ function AiCredentialForm(props: AiCredentialFormProps) {
           <Button
             type="primary"
             loading={testing || saving}
+            disabled={!encryptionReady}
             onClick={props.onTestAndSave}
             block
             className="sm:w-auto"

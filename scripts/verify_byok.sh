@@ -10,14 +10,17 @@
 # 覆盖验收项：
 #   - 未登录 / 游客调用配置接口 → 401 / 403
 #   - 厂商目录返回预设与申请链接
-#   - 保存后仅回显脱敏 Key（sk-****abcd），响应全文不含明文
-#   - 不重填 Key 可更新模型
-#   - 删除后 overview 回到未配置
+#   - 无验证票据直接保存 → 422 + BYOK_VERIFICATION_REQUIRED
+#   - 假 Key 测试失败时不签发票据
+#   - 显式提供 BYOK_REAL_KEY 时验证「测试 → 票据 → 保存 → 删除」成功路径
+#   - 保存/overview 响应不含明文 Key
+#   - 删除不存在的凭据 → 404
 #   - BYOK_ENABLED=false 时接口 404（需重启为关闭状态后单独执行）
 #
 # 用法：
 #   ./scripts/verify_byok.sh
 #   BASE=http://localhost:8080/api/v1 ./scripts/verify_byok.sh
+#   BYOK_REAL_KEY=sk-xxx BYOK_PROVIDER=deepseek BYOK_MODEL=deepseek-chat ./scripts/verify_byok.sh
 # ============================================================
 set -uo pipefail
 
@@ -55,7 +58,7 @@ SUFFIX="$(date +%s)${RANDOM}"
 USERNAME="byok_${SUFFIX}"
 EMAIL="${USERNAME}@example.com"
 PASSWORD='StrongPass1!'
-# 故意使用明显的假 Key；测试接口会失败，但「仍然保存」路径照常验证
+# 故意使用明显的假 Key，用于验证「无票据不能保存」和「失败不签发票据」
 FAKE_KEY="sk-byok-verify-${SUFFIX}-123456"
 
 printf '\n== BYOK 验收开始 | 目标: %s ==\n\n' "$BASE"
@@ -95,46 +98,19 @@ else
   bad "缺少豆包图像预设"
 fi
 
-# ---------- 2. 保存与脱敏 ----------
-echo "[2] 保存 LLM 凭据"
+# ---------- 2. 保存门禁：无票据必须拒绝 ----------
+echo "[2] 保存门禁（无验证票据）"
 STATUS="$(request PUT /users/me/ai-credentials/llm \
   "$(json --arg k "$FAKE_KEY" '{provider:"deepseek",api_key:$k}')" "$TOKEN")"
-expect "保存返回 200" 200 "$STATUS"
-HINT="$(field '.data.api_key_hint')"
-if [ "$HINT" != "null" ] && [ -n "$HINT" ] && [ "$HINT" != "$FAKE_KEY" ]; then
-  ok "回显为脱敏值（$HINT）"
+expect "无票据直接保存返回 422" 422 "$STATUS"
+if [ "$(field '.error_code')" = "BYOK_VERIFICATION_REQUIRED" ]; then
+  ok "返回结构化错误码 BYOK_VERIFICATION_REQUIRED"
 else
-  bad "回显未脱敏或为空（$HINT）"
-fi
-if grep -q "$FAKE_KEY" "$BODY_FILE"; then
-  bad "响应体包含明文 Key"
-else
-  ok "响应体不含明文 Key"
+  bad "缺少 BYOK_VERIFICATION_REQUIRED（实际：$(field '.error_code')）"
 fi
 
-STATUS="$(request GET /users/me/ai-credentials '' "$TOKEN")"
-expect "overview 返回 200" 200 "$STATUS"
-if jq -e '.data.credentials.llm != null' "$BODY_FILE" >/dev/null 2>&1; then
-  ok "overview 含已保存的 LLM 凭据"
-else
-  bad "overview 缺少 LLM 凭据"
-fi
-if grep -q "$FAKE_KEY" "$BODY_FILE"; then
-  bad "overview 包含明文 Key"
-else
-  ok "overview 不含明文 Key"
-fi
-
-# ---------- 3. 不重填 Key 更新模型 ----------
-echo "[3] 更新模型（api_key 省略）"
-STATUS="$(request PUT /users/me/ai-credentials/llm \
-  '{"provider":"deepseek","model":"deepseek-reasoner"}' "$TOKEN")"
-expect "更新返回 200" 200 "$STATUS"
-MODEL="$(field '.data.model')"
-expect "模型已更新" "deepseek-reasoner" "$MODEL"
-
-# ---------- 4. 测试连接（假 Key 应可读失败，但接口 200） ----------
-echo "[4] 测试连接"
+# ---------- 3. 测试失败：不签发票据 ----------
+echo "[3] 测试连接（假 Key）"
 STATUS="$(request POST /users/me/ai-credentials/test \
   "$(json --arg k "$FAKE_KEY" '{capability:"llm",provider:"deepseek",api_key:$k}')" "$TOKEN")"
 expect "测试接口返回 200" 200 "$STATUS"
@@ -143,18 +119,79 @@ if [ "$(field '.data.ok')" = "false" ]; then
 else
   warn "假 Key 未被拒绝（若配置了真实可用的 DeepSeek 网关请忽略）"
 fi
-
-# ---------- 5. 删除 ----------
-echo "[5] 移除凭据"
-STATUS="$(request DELETE /users/me/ai-credentials/llm '' "$TOKEN")"
-expect "移除返回 200" 200 "$STATUS"
-STATUS="$(request GET /users/me/ai-credentials '' "$TOKEN")"
-expect "overview 返回 200" 200 "$STATUS"
-if jq -e '.data.credentials.llm == null' "$BODY_FILE" >/dev/null 2>&1; then
-  ok "凭据已移除"
+TEST_TOKEN="$(field '.data.verification_token')"
+if [ "$TEST_TOKEN" = "null" ] || [ -z "$TEST_TOKEN" ]; then
+  ok "失败测试未签发票据"
 else
-  bad "凭据仍存在"
+  bad "失败测试不应签发票据"
 fi
+
+# ---------- 4. 可选：真实 Key 的测试 → 票据 → 保存 → 删除 ----------
+if [ -n "${BYOK_REAL_KEY:-}" ]; then
+  echo "[4] 真实 Key 成功路径"
+  BYOK_PROVIDER="${BYOK_PROVIDER:-deepseek}"
+  BYOK_MODEL="${BYOK_MODEL:-deepseek-chat}"
+
+  STATUS="$(request POST /users/me/ai-credentials/test \
+    "$(json --arg k "$BYOK_REAL_KEY" --arg p "$BYOK_PROVIDER" --arg m "$BYOK_MODEL" \
+      '{capability:"llm",provider:$p,api_key:$k,model:$m}')" "$TOKEN")"
+  expect "真实 Key 测试返回 200" 200 "$STATUS"
+  TEST_TOKEN="$(field '.data.verification_token')"
+  if [ "$(field '.data.ok')" = "true" ] && [ "$(field '.data.verified')" = "true" ] && \
+     [ "$TEST_TOKEN" != "null" ] && [ -n "$TEST_TOKEN" ]; then
+    ok "真实 Key 测试通过并取得验证票据"
+  else
+    bad "真实 Key 测试失败或未返回验证票据：$(field '.data.message')"
+  fi
+
+  if [ "$TEST_TOKEN" != "null" ] && [ -n "$TEST_TOKEN" ]; then
+    STATUS="$(request PUT /users/me/ai-credentials/llm \
+      "$(json --arg k "$BYOK_REAL_KEY" --arg p "$BYOK_PROVIDER" --arg m "$BYOK_MODEL" --arg t "$TEST_TOKEN" \
+        '{provider:$p,api_key:$k,model:$m,verification_token:$t}')" "$TOKEN")"
+    expect "带票据保存返回 200" 200 "$STATUS"
+    HINT="$(field '.data.api_key_hint')"
+    if [ "$HINT" != "null" ] && [ -n "$HINT" ] && [ "$HINT" != "$BYOK_REAL_KEY" ]; then
+      ok "回显为脱敏值（$HINT）"
+    else
+      bad "回显未脱敏或为空（$HINT）"
+    fi
+    if grep -Fq "$BYOK_REAL_KEY" "$BODY_FILE"; then
+      bad "保存响应包含明文 Key"
+    else
+      ok "保存响应不含明文 Key"
+    fi
+
+    STATUS="$(request GET /users/me/ai-credentials '' "$TOKEN")"
+    expect "overview 返回 200" 200 "$STATUS"
+    if jq -e '.data.credentials.llm != null' "$BODY_FILE" >/dev/null 2>&1; then
+      ok "overview 含已保存的 LLM 凭据"
+    else
+      bad "overview 缺少 LLM 凭据"
+    fi
+    if grep -Fq "$BYOK_REAL_KEY" "$BODY_FILE"; then
+      bad "overview 包含明文 Key"
+    else
+      ok "overview 不含明文 Key"
+    fi
+
+    STATUS="$(request DELETE /users/me/ai-credentials/llm '' "$TOKEN")"
+    expect "移除返回 200" 200 "$STATUS"
+    STATUS="$(request GET /users/me/ai-credentials '' "$TOKEN")"
+    expect "overview 返回 200" 200 "$STATUS"
+    if jq -e '.data.credentials.llm == null' "$BODY_FILE" >/dev/null 2>&1; then
+      ok "凭据已移除"
+    else
+      bad "凭据仍存在"
+    fi
+  fi
+else
+  warn "未设置 BYOK_REAL_KEY，跳过真实 Key 的成功保存路径"
+fi
+
+# ---------- 5. 删除不存在的凭据 ----------
+echo "[5] 删除不存在的凭据"
+STATUS="$(request DELETE /users/me/ai-credentials/llm '' "$TOKEN")"
+expect "重复删除返回 404" 404 "$STATUS"
 
 printf '\n== 结果：%d 通过 / %d 失败 ==\n\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

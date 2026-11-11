@@ -5,6 +5,7 @@ import { CheckCircleFilled, KeyOutlined } from '@ant-design/icons'
 import AiCredentialForm from './AiCredentialForm'
 import AiCredentialSummary from './AiCredentialSummary'
 import { aiCredentialsApi } from '../../api/aiCredentials'
+import { logCredentialError } from '../../utils/errors'
 import type {
   AiCredentialOverview,
   CredentialCapability,
@@ -68,6 +69,7 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testResult, setTestResult] = useState<CredentialTestResult | null>(null)
+  const [verificationToken, setVerificationToken] = useState<FormMap>(emptyForm)
   const [formError, setFormError] = useState('')
 
   const syncForm = useCallback((cat: CredentialCatalog, ov: AiCredentialOverview) => {
@@ -91,6 +93,7 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
     setModel(nextModel)
     setEditing(emptyEditing())
     setApiKey(emptyForm())
+    setVerificationToken(emptyForm())
   }, [])
 
   const load = useCallback(async () => {
@@ -110,7 +113,7 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
       setCatalog(cat)
       syncForm(cat, ov)
     } catch (error) {
-      console.error('读取 API Key 配置失败', error)
+      logCredentialError('读取 API Key 配置', error)
       const status = (error as { response?: { status?: number } }).response?.status
       if (status === 404) {
         // BYOK_ENABLED=false：接口按设计返回 404，个人中心直接不展示配置区
@@ -132,6 +135,7 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
 
   const resetFeedback = () => {
     setTestResult(null)
+    setVerificationToken(emptyForm())
     setFormError('')
   }
 
@@ -154,11 +158,20 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
     model: model[active].trim() || undefined,
   })
 
-  const doSave = async () => {
+  const doSave = async (tokenOverride?: string) => {
+    const token = tokenOverride ?? verificationToken[active]
+    if (!token) {
+      setFormError('请先测试连接，验证通过后再保存')
+      return
+    }
+
     setSaving(true)
     setFormError('')
     try {
-      const { data } = await aiCredentialsApi.save(active, buildPayload())
+      const { data } = await aiCredentialsApi.save(active, {
+        ...buildPayload(),
+        verification_token: token,
+      })
       if (!data.data) {
         throw new Error(data.message || '保存失败')
       }
@@ -169,7 +182,7 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
       await load()
       onChanged?.()
     } catch (error) {
-      console.error('保存 API Key 失败', error)
+      logCredentialError('保存 API Key', error)
       setFormError(error instanceof Error ? error.message : '保存失败，请稍后重试')
     } finally {
       setSaving(false)
@@ -177,6 +190,10 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
   }
 
   const handleTestAndSave = async () => {
+    if (!overview?.encryption_ready) {
+      setFormError('服务端未配置可用的 ENCRYPTION_KEY，暂时无法保存 API Key')
+      return
+    }
     if (!apiKey[active].trim() && !existing) {
       setFormError('请先粘贴 API Key')
       return
@@ -197,12 +214,19 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
         throw new Error(data.message || '测试失败')
       }
       setTestResult(result)
-      // 严格校验：只有测试通过才保存；失败仅展示原因，不提供绕过入口
-      if (result.ok) {
-        await doSave()
+      if (!result.ok || !result.verified) {
+        setFormError('服务端未完成验证，不能保存；请检查配置后重试')
+        return
       }
+      if (!result.verification_token) {
+        setFormError('服务端未返回验证票据，请重新测试连接')
+        return
+      }
+      setVerificationToken((prev) => ({ ...prev, [active]: result.verification_token! }))
+      // 必须显式传递刚拿到的票据：setState 在同一事件循环内尚未生效。
+      await doSave(result.verification_token)
     } catch (error) {
-      console.error('测试 API Key 失败', error)
+      logCredentialError('测试 API Key', error)
       setFormError(error instanceof Error ? error.message : '测试失败，请稍后重试')
     } finally {
       setTesting(false)
@@ -216,7 +240,7 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
       await load()
       onChanged?.()
     } catch (error) {
-      console.error('移除 API Key 失败', error)
+      logCredentialError('移除 API Key', error)
       setFormError('移除失败，请稍后重试')
     }
   }
@@ -304,7 +328,10 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
       {summary && !showForm ? (
         <AiCredentialSummary
           credential={summary}
-          onEdit={() => setEditing((prev) => ({ ...prev, [active]: true }))}
+          onEdit={() => {
+            resetFeedback()
+            setEditing((prev) => ({ ...prev, [active]: true }))
+          }}
           onRemove={() => void handleRemove()}
         />
       ) : (
@@ -319,6 +346,7 @@ function AiCredentialCard({ onChanged }: AiCredentialCardProps) {
           advancedOpen={advancedOpen}
           testing={testing}
           saving={saving}
+          encryptionReady={overview.encryption_ready}
           testResult={testResult}
           formError={formError}
           onProviderChange={handleProviderChange}

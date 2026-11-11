@@ -25,7 +25,7 @@ StoryCanvas 是一个面向儿童绘本创作场景的 Web 应用。用户输入
 | 绘本与作品库 | 创建绘本、管理页顺序、绑定生成图、复用历史图片，并导出多页 PDF |
 | 游客优先体验 | 未登录也能体验生成；登录或注册后可认领游客期间产生的资源 |
 | 账号与会话 | 邮箱/用户名注册登录、JWT 双 Token、刷新令牌、密码哈希与用户数据隔离 |
-| BYOK | 用户可配置自己的 LLM / 图像 API Key；密文入库、脱敏回显、保存前连通性校验 |
+| BYOK | 用户可配置自己的 LLM / 图像 API Key；密文入库、脱敏回显、测试通过后凭短期票据保存 |
 | 成本与稳定性 | 游客池/登录池每日额度、接口限流、429 提示、内容合规快速失败、日志不输出明文 Key |
 | 离线 Mock 模式 | 内置 Mock LLM 与 Mock 图像 Provider，可生成真实 PNG，无需外部模型即可跑通完整链路 |
 
@@ -244,7 +244,7 @@ Mock LLM 返回结构化分镜，Mock 图像 Provider 会生成真实 PNG 文件
 
 1. 选择厂商，例如 DeepSeek、豆包·Seedream、OpenAI Compatible、通义千问、智谱 GLM 等；
 2. 粘贴 API Key；Base URL 与推荐模型由服务端目录自动带出，自定义厂商可展开高级设置；
-3. 点击「保存并验证」，验证成功后才会保存。
+3. 点击「保存并验证」：服务端先做连通性测试，测试通过后签发短期验证票据，保存请求必须携带该票据。
 
 当前连通性校验行为：
 
@@ -253,6 +253,12 @@ Mock LLM 返回结构化分镜，Mock 图像 Provider 会生成真实 PNG 文件
 | LLM | 发起一次 `max_tokens=1` 的真实探测 |
 | 图像 | 生成一张 1K 测试图完成连通性校验，通常会计费一次；测试图不落盘、不下载 |
 
+凭证门禁：
+
+- 验证票据有效期约 10 分钟，绑定 userId、能力、厂商、Base URL、模型与 Key 哈希；
+- 修改任一配置或重新选择能力后，前端会丢弃旧票据，必须重新测试；
+- 直接调用 `PUT /users/me/ai-credentials/{capability}` 而不先测试会返回 422 / `BYOK_VERIFICATION_REQUIRED`。
+
 安全与额度规则：
 
 - Key 以 **AES-256-GCM 密文**入库，接口只回显 `sk-****abcd` 一类脱敏信息；
@@ -260,7 +266,7 @@ Mock LLM 返回结构化分镜，Mock 图像 Provider 会生成真实 PNG 文件
 - 双项 BYOK 都配置时，该用户任务不占游客池/登录池每日额度；
 - 只配置一项时，未配置的能力仍走系统 Key，任务照常计入额度；
 - 已配置能力调用失败时任务直接失败并提示更新 Key，不静默回退系统 Key；
-- `ENCRYPTION_KEY` 未配置时，保存与测试接口不可用；
+- `BYOK_ENABLED=true` 时，`ENCRYPTION_KEY` 缺失、过短或仍是 `change_me` 等占位值会导致后端启动失败；
 - 轮换 `ENCRYPTION_KEY` 会导致旧密文无法解密，用户需要重新保存 Key；
 - 设置 `BYOK_ENABLED=false` 可关闭整套 BYOK 接口并让所有请求回到系统 Key。
 
@@ -396,6 +402,8 @@ npm run typecheck && npm test
 - `.githooks/pre-commit` 与 `.githooks/pre-push` 会在提交与推送前扫描疑似密钥；
 - 密码使用 bcrypt 哈希，会话使用 JWT 双 Token；
 - 用户 BYOK Key 使用 AES-256-GCM 信封加密，密文绑定用户与能力；
+- 保存前必须完成真实连通性测试，服务端签发短期 HMAC 验证票据；保存时校验票据签名、过期时间与配置哈希，防止直接 PUT 绕过；
+- 前端错误日志只记录 HTTP 状态和 message，不打印含请求体的 AxiosError；
 - 自定义 Base URL 会校验 HTTPS、端口、userinfo、查询参数与公网地址，降低 SSRF 风险；
 - 登录、游客会话、生成、重画与凭据测试均有独立限流档位；
 - 内容合规失败快速返回可读原因，不自动重试；

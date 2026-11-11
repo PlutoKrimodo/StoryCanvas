@@ -50,10 +50,10 @@ const catalog = {
   },
 }
 
-function overviewWithLlm(configured: boolean) {
+function overviewWithLlm(configured: boolean, encryptionReady = true) {
   return {
     byok_enabled: true,
-    encryption_ready: true,
+    encryption_ready: encryptionReady,
     quota_exempt: false,
     credentials: {
       llm: configured
@@ -73,15 +73,26 @@ function overviewWithLlm(configured: boolean) {
   }
 }
 
-function mockResolved(configured = false) {
-  api.getOverview.mockResolvedValue({ data: { data: overviewWithLlm(configured) } })
+function mockResolved(configured = false, encryptionReady = true) {
+  api.getOverview.mockResolvedValue({
+    data: { data: overviewWithLlm(configured, encryptionReady) },
+  })
   api.getProviders.mockResolvedValue({ data: { data: catalog } })
   api.save.mockResolvedValue({
     data: { data: overviewWithLlm(true).credentials.llm, message: 'ok' },
   })
   api.remove.mockResolvedValue({ data: { data: null } })
   api.test.mockResolvedValue({
-    data: { data: { ok: true, verified: true, latency_ms: 120, message: '连接成功' } },
+    data: {
+      data: {
+        ok: true,
+        verified: true,
+        latency_ms: 120,
+        message: '连接成功',
+        verification_token: 'ticket-abc',
+        expires_in: 600,
+      },
+    },
   })
 }
 
@@ -93,6 +104,7 @@ describe('AiCredentialCard（BYOK 接入）', () => {
 
   afterEach(() => {
     cleanup()
+    vi.restoreAllMocks()
   })
 
   it('未配置时展示三步引导与默认厂商', async () => {
@@ -123,6 +135,7 @@ describe('AiCredentialCard（BYOK 接入）', () => {
           api_key: 'sk-new-key-123456',
           api_base: 'https://api.deepseek.com',
           model: 'deepseek-chat',
+          verification_token: 'ticket-abc',
         }),
       ),
     )
@@ -160,5 +173,58 @@ describe('AiCredentialCard（BYOK 接入）', () => {
     fireEvent.click(screen.getByText('高级设置（Base URL / 模型）'))
 
     expect(await screen.findByDisplayValue('https://api.deepseek.com')).toBeInTheDocument()
+  })
+
+  it('测试成功但缺少验证票据时不保存', async () => {
+    api.test.mockResolvedValue({
+      data: {
+        data: { ok: true, verified: true, latency_ms: 120, message: '连接成功' },
+      },
+    })
+
+    renderWithTheme(<AiCredentialCard />)
+    await screen.findByText('我的 AI API Key')
+    fireEvent.change(screen.getByLabelText('API Key'), {
+      target: { value: 'sk-new-key-123456' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '保存并验证' }))
+
+    expect(
+      await screen.findByText('服务端未返回验证票据，请重新测试连接', undefined, {
+        timeout: 8000,
+      }),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(api.save).not.toHaveBeenCalled())
+  })
+
+  it('encryption_ready=false 时禁用保存并展示配置警告', async () => {
+    mockResolved(false, false)
+    renderWithTheme(<AiCredentialCard />)
+
+    expect(
+      await screen.findByText('服务端尚未配置 ENCRYPTION_KEY，暂时无法保存 API Key'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '保存并验证' })).toBeDisabled()
+  })
+
+  it('错误日志只记录状态与 message，不打印含 key 的 AxiosError 配置', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const leakyError = Object.assign(new Error('Request failed'), {
+      response: { status: 500, data: { message: '服务器错误' } },
+      config: { data: '{"api_key":"sk-leak-should-not-appear"}' },
+    })
+    api.test.mockRejectedValue(leakyError)
+
+    renderWithTheme(<AiCredentialCard />)
+    await screen.findByText('我的 AI API Key')
+    fireEvent.change(screen.getByLabelText('API Key'), {
+      target: { value: 'sk-new-key-123456' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '保存并验证' }))
+
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
+    const logged = errorSpy.mock.calls.flat().join(' ')
+    expect(logged).toContain('HTTP 500')
+    expect(logged).not.toContain('sk-leak-should-not-appear')
   })
 })

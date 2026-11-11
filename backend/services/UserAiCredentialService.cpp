@@ -4,7 +4,9 @@
 
 #include "../repositories/UserAiCredentialRepository.h"
 #include "../utils/AiCredentialRules.h"
+#include "../utils/AiCredentialTicket.h"
 #include "../utils/ConfigManager.h"
+#include "../utils/EncryptionUtils.h"
 #include "../utils/SecretBox.h"
 #include "AiServiceClient.h"
 
@@ -189,6 +191,29 @@ ServiceResult UserAiCredentialService::save(const std::string &userId,
         return result;
     }
 
+    const std::string verificationToken = stringField(body, "verification_token");
+    if (verificationToken.empty()) {
+        result = fail(422, "请先测试连接，验证通过后再保存");
+        result.errorCode = "BYOK_VERIFICATION_REQUIRED";
+        return result;
+    }
+
+    AiCredentialTicketContext ticketContext;
+    ticketContext.userId = userId;
+    ticketContext.capability = prepared.capability;
+    ticketContext.provider = prepared.provider;
+    ticketContext.apiBase = prepared.apiBase;
+    ticketContext.model = prepared.model;
+    ticketContext.apiKeyHash = EncryptionUtils::sha256(prepared.apiKey);
+
+    std::string ticketError;
+    if (!AiCredentialTicket::verify(ConfigManager::jwtSecret, verificationToken,
+                                    ticketContext, ticketError)) {
+        result = fail(422, ticketError);
+        result.errorCode = "BYOK_VERIFICATION_REQUIRED";
+        return result;
+    }
+
     UserAiCredential credential;
     credential.userId = userId;
     credential.capability = prepared.capability;
@@ -225,7 +250,14 @@ ServiceResult UserAiCredentialService::remove(const std::string &userId,
         return fail(422, "capability 仅支持 llm 或 image");
     }
 
-    UserAiCredentialRepository::remove(userId, capabilityText);
+    const auto removed = UserAiCredentialRepository::remove(userId, capabilityText);
+    if (removed == UserAiCredentialRepository::RemoveResult::Error) {
+        return fail(500, "删除 API Key 失败，请稍后重试");
+    }
+    if (removed == UserAiCredentialRepository::RemoveResult::NotFound) {
+        return fail(404, "未找到该能力的 API Key 配置");
+    }
+
     spdlog::info("用户 AI 凭据已移除: user={} capability={}", userId, capabilityText);
     return ok("API Key 已移除", nullptr);
 }
@@ -261,12 +293,33 @@ ServiceResult UserAiCredentialService::test(const std::string &userId, const jso
         });
     }
 
-    return ok("测试完成", {
+    json data = {
         {"ok", testResult.ok},
         {"verified", testResult.verified},
         {"latency_ms", testResult.latencyMs},
         {"message", testResult.message}
-    });
+    };
+
+    // 只有真实连通性验证通过才签发保存票据；票据仅绑定配置哈希与短期时间，
+    // 不包含明文 Key，也不落库。
+    if (testResult.ok && testResult.verified) {
+        AiCredentialTicketContext ticketContext;
+        ticketContext.userId = userId;
+        ticketContext.capability = prepared.capability;
+        ticketContext.provider = prepared.provider;
+        ticketContext.apiBase = prepared.apiBase;
+        ticketContext.model = prepared.model;
+        ticketContext.apiKeyHash = EncryptionUtils::sha256(prepared.apiKey);
+        try {
+            data["verification_token"] = AiCredentialTicket::issue(
+                ConfigManager::jwtSecret, ticketContext);
+            data["expires_in"] = AiCredentialTicket::kDefaultTtlSeconds;
+        } catch (const std::exception &) {
+            return fail(500, "签发验证票据失败，请稍后重新测试");
+        }
+    }
+
+    return ok("测试完成", data);
 }
 
 bool UserAiCredentialService::loadConfigured(const std::string &userId,

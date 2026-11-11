@@ -2,6 +2,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "EncryptionUtils.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -274,11 +276,14 @@ void ConfigManager::validate() {
                      rateLimitAnonPerMin, rateLimitAuthPerMin,
                      rateLimitGenerationPerMin, rateLimitGuestTokenPerMin);
     }
-    if (byokEnabled && encryptionKey.empty()) {
-        // BYOK 的 API Key 必须加密落库；没有密钥时接口返回 503，这里提前给出可执行提示
-        spdlog::warn("BYOK_ENABLED=true 但 ENCRYPTION_KEY 未配置："
-                     "用户将无法保存自带 API Key（生成仍可用系统 Key）。"
-                     "生成方式：openssl rand -base64 32");
+    if (byokEnabled) {
+        // BYOK 必然写入用户 API Key；密钥不可用时拒绝启动，避免弱密钥加密落库。
+        std::string encryptionError;
+        if (!EncryptionUtils::isUsableKey(encryptionKey, encryptionError)) {
+            spdlog::critical("BYOK_ENABLED=true，但 {}", encryptionError);
+            spdlog::critical("请生成 ENCRYPTION_KEY 后重启：openssl rand -base64 32");
+            std::exit(EXIT_FAILURE);
+        }
     } else if (encryptionKey.empty()) {
         spdlog::debug("ENCRYPTION_KEY 未配置：未启用敏感字段 AES 加密存储");
     }

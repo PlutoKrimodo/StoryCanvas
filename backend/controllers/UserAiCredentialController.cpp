@@ -27,7 +27,7 @@ void respond(const std::function<void(const HttpResponsePtr &)> &callback,
             ApiResponse::success(result.message, result.data),
             static_cast<drogon::HttpStatusCode>(result.code)));
     } else {
-        callback(ApiResponse::fail(result.code, result.message));
+        callback(ApiResponse::fail(result.code, result.message, result.errorCode));
     }
 }
 

@@ -93,5 +93,6 @@ std::string SecretBox::hint(const std::string &secret) {
 }
 
 bool SecretBox::hasKey(const std::string &key) {
-    return !key.empty();
+    std::string error;
+    return EncryptionUtils::isUsableKey(key, error);
 }

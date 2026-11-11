@@ -3,6 +3,8 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 
+#include <algorithm>
+#include <cctype>
 #include <stdexcept>
 #include <vector>
 
@@ -238,11 +240,45 @@ bool EncryptionUtils::constantTimeEquals(const std::string &lhs, const std::stri
     return diff == 0;
 }
 
+bool EncryptionUtils::isUsableKey(const std::string &key, std::string &error) {
+    error.clear();
+    if (key.empty()) {
+        error = "ENCRYPTION_KEY 未配置";
+        return false;
+    }
+
+    std::string lowered = key;
+    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (lowered.find("change_me") != std::string::npos ||
+        lowered.find("changeme") != std::string::npos ||
+        lowered.rfind("your_", 0) == 0 ||
+        lowered.find("placeholder") != std::string::npos ||
+        lowered == "test" || lowered == "example") {
+        error = "ENCRYPTION_KEY 仍是占位值，请使用 openssl rand -base64 32 生成";
+        return false;
+    }
+
+    try {
+        if (Base64::decode(key).size() == kKeyLength) {
+            return true;
+        }
+    } catch (const std::exception &) {
+        // 非 Base64 时继续按长口令判断
+    }
+
+    if (key.size() >= 32) {
+        return true;
+    }
+    error = "ENCRYPTION_KEY 过短，请使用至少 32 字符的高熵值或 openssl rand -base64 32";
+    return false;
+}
+
 std::string EncryptionUtils::maskSecret(const std::string &secret) {
     if (secret.empty()) {
         return "";
     }
-    if (secret.size() <= 8) {
+    if (secret.size() <= 12) {
         return "****";
     }
     return secret.substr(0, 4) + "****" + secret.substr(secret.size() - 4);

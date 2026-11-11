@@ -27,6 +27,13 @@ public:
     static std::string randomHex(size_t bytes);
     static std::string maskSecret(const std::string &secret);
 
+    /**
+     * 判断 ENCRYPTION_KEY 是否达到可用强度：
+     * Base64 解码后正好 32 字节，或原始字符串至少 32 个字符；
+     * 拒绝空值、常见占位值和过短口令。
+     */
+    static bool isUsableKey(const std::string &key, std::string &error);
+
     /** 恒定时间比较，用于签名/哈希比对，避免时序侧信道 */
     static bool constantTimeEquals(const std::string &lhs, const std::string &rhs);
 };
