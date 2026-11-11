@@ -6,7 +6,11 @@ import pytest
 import app.providers.image.doubao_provider as module
 from app.models.schemas import ImageGenerationParams
 from app.providers.image.doubao_provider import DoubaoProvider
-from app.utils.exceptions import ImageProviderException
+from app.utils.exceptions import (
+    AIServiceException,
+    CONTENT_REJECTED,
+    ImageProviderException,
+)
 
 
 def _params(seed: int | None = None) -> ImageGenerationParams:
@@ -103,8 +107,9 @@ async def test_policy_violation_fast_fails_with_readable_message(monkeypatch):
         api_base="https://ark.example.com/api/v3",
     )
 
-    with pytest.raises(ImageProviderException) as exc:
+    with pytest.raises(AIServiceException) as exc:
         await provider.generate(_params())
 
-    assert exc.value.code == 403
+    assert exc.value.code == 422
+    assert exc.value.error_code == CONTENT_REJECTED
     assert "版权" in str(exc.value)

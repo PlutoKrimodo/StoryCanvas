@@ -19,6 +19,7 @@ from ..models.schemas import (
 from ..utils.config import settings
 from ..utils.exceptions import AIServiceException
 from ..utils.storage import build_image_rel_path, guess_extension, new_image_id, save_bytes
+from . import content_policy
 from .base import BaseService
 from .image_generator import ImageGeneratorService
 from .prompt_optimizer import PromptOptimizerService
@@ -98,6 +99,10 @@ class GenerationService(BaseService):
         request: ImageGenerateRequest,
         parsed_data: Optional[ParsedData] = None,
     ) -> ImageGenerateResponse:
+        # 输入预检：批次单格可能被用户编辑成新的不安全描述，因此即使
+        # storyboard 阶段已通过，这里仍要在调用 LLM / 图像厂商前再检一次。
+        content_policy.assert_allowed(request.text)
+
         # 1. 文本解析：批次会把 storyboard 阶段的 parsed_data 透传进来，
         #    此时 N 个任务只解析一次，禁止再次调用 LLM。
         if parsed_data is None:
@@ -154,7 +159,16 @@ class GenerationService(BaseService):
         )
         result = await self.image_generator.generate(params)
 
-        # 4. 二进制化 + 落盘
+        # 5. 输出复核：先判定是否可进入落盘与绘本，再写文件。
+        review_status, review_reason = content_policy.review_output(
+            provider_name=self.image_generator.provider_name,
+            prompt=prompt,
+            negative_prompt=negative,
+            finish_reason=result.finish_reason,
+            provider_metadata=result.provider_metadata,
+        )
+
+        # 6. 二进制化 + 落盘
         data, content_type = await self.image_generator.materialize(result)
         if len(data) > settings.MAX_IMAGE_SIZE:
             # Q8：错误信息直接透传到后端任务 error_message 与前端失败提示，
@@ -176,6 +190,8 @@ class GenerationService(BaseService):
             negative_prompt=negative,
             parsed_data=parsed_data,
             model_used=self.image_generator.provider_name,
+            content_review_status=review_status,
+            content_review_reason=review_reason,
             image=GeneratedImageInfo(
                 image_id=image_id,
                 file_path=rel_path,

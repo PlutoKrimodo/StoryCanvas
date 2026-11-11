@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 
 #include "../models/BookPage.h"
+#include "../models/GeneratedImage.h"
 #include "../repositories/BookPageRepository.h"
 #include "../repositories/BookRepository.h"
 #include "../repositories/GeneratedImageRepository.h"
@@ -25,6 +26,23 @@ ServiceResult forbidden(const std::string &message) {
     return result;
 }
 
+ServiceResult contentReviewBlocked(const std::string &message) {
+    ServiceResult result;
+    result.code = 422;
+    result.errorCode = "CONTENT_REVIEW_REQUIRED";
+    result.message = message;
+    return result;
+}
+
+bool isContentApproved(const GeneratedImage &image) {
+    // 旧数据没有该字段时按历史行为放行；新生成图由 AI 服务写入策略状态。
+    if (!image.parameters.is_object()) {
+        return true;
+    }
+    return image.parameters.value("content_review_status", std::string("approved")) ==
+           "approved";
+}
+
 }  // namespace
 
 ServiceResult PageService::savePage(const std::string &userId,
@@ -45,6 +63,9 @@ ServiceResult PageService::savePage(const std::string &userId,
     auto image = GeneratedImageRepository::findByIdAndUser(req.imageId, userId);
     if (!image.has_value()) {
         return notFound("图片不存在");
+    }
+    if (!isContentApproved(*image)) {
+        return contentReviewBlocked("图片内容待复核，暂不能加入绘本，请重新生成或更换描述");
     }
 
     // 3. upsert 页
@@ -99,6 +120,11 @@ ServiceResult PageService::saveBatchPages(const std::string &userId,
     }
     if (images->size() != req.imageIds.size()) {
         return notFound("部分图片不存在或无权使用");
+    }
+    for (const auto &image : *images) {
+        if (!isContentApproved(image)) {
+            return contentReviewBlocked("部分图片内容待复核，暂不能加入绘本，请重新生成或更换描述");
+        }
     }
 
     std::map<std::string, GeneratedImage> byId;

@@ -12,6 +12,7 @@ import httpx
 from ...models.schemas import ImageGenerationParams, ImageGenerationResult
 from ...utils.config import settings
 from ...utils.exceptions import ImageProviderException
+from ...services.content_policy import provider_rejection
 from ...utils.http_client import describe_http_error, post_json
 from .base import ImageProvider
 
@@ -91,16 +92,12 @@ class DoubaoProvider(ImageProvider):
                     detail_code,
                     detail_message,
                 )
-                # 版权 / 内容安全策略是确定性失败，快速失败并给出可读原因，避免无意义重试
-                if (
-                    "SensitiveContentDetected" in detail_code
-                    or "PolicyViolation" in detail_code
-                    or "copyright" in detail_message.lower()
-                ):
-                    raise ImageProviderException(
-                        "图像涉及版权或内容安全限制，请使用原创角色与场景后重试",
-                        403,
-                    ) from exc
+                # 版权 / 内容安全策略统一归一为 CONTENT_REJECTED，禁止自动重试。
+                rejection = provider_rejection(
+                    "doubao", status, detail_code, detail_message
+                )
+                if rejection is not None:
+                    raise rejection from exc
             else:
                 self.logger.error("豆包 Seedream 调用失败: %s", reason)
             raise ImageProviderException(f"豆包 Seedream 调用失败：{reason}", code) from exc
@@ -120,12 +117,22 @@ class DoubaoProvider(ImageProvider):
         if not url and not b64:
             raise ImageProviderException(f"豆包 Seedream 未返回图片: {data}", 502)
 
+        metadata: Dict[str, object] = {}
+        for key in ("content_filter_results", "content_filter"):
+            if data.get(key) is not None:
+                metadata[key] = data[key]
+        if isinstance(first, dict):
+            for key in ("content_filter_results", "content_filter"):
+                if first.get(key) is not None:
+                    metadata[key] = first[key]
+
         return ImageGenerationResult(
             image_url=url or "",
             width=params.width,
             height=params.height,
             seed=params.seed,
             finish_reason="success",
+            provider_metadata=metadata or None,
         )
 
     async def health_check(self) -> bool:

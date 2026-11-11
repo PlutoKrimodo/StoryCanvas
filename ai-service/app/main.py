@@ -38,9 +38,12 @@ def create_app() -> FastAPI:
     # 业务异常统一转为结构化错误（不返回堆栈，避免泄露内部细节）
     @app.exception_handler(AIServiceException)
     async def _ai_exception_handler(_: Request, exc: AIServiceException) -> JSONResponse:
+        content = {"status": "error", "code": exc.code, "message": exc.message}
+        if exc.error_code:
+            content["error_code"] = exc.error_code
         return JSONResponse(
             status_code=exc.code if 400 <= exc.code < 600 else 500,
-            content={"status": "error", "code": exc.code, "message": exc.message},
+            content=content,
         )
 
     # 注册路由

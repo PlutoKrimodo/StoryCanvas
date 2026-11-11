@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Collapse, Progress, Space, Steps, Typography } from 'antd'
 
 import { TaskStatus, type TaskResult } from '../../types/generation'
-import { TASK_STATUS_TEXT } from '../../utils/constants'
+import { TASK_STATUS_TEXT, formatTaskError, isContentRejected } from '../../utils/constants'
 
 const { Paragraph, Text } = Typography
 
@@ -121,6 +121,7 @@ function GenerationProgress({ task, polling, onCancel, onRegenerate }: Generatio
 
   const active = isActive(task.status)
   const stage = stageOf(task.status, polling)
+  const contentRejected = isContentRejected(task.error_code)
 
   return (
     <section className="rounded-card bg-canvas2 px-5 py-4 ring-1 ring-hairline">
@@ -135,7 +136,7 @@ function GenerationProgress({ task, polling, onCancel, onRegenerate }: Generatio
               取消生成
             </Button>
           ) : null}
-          {!active && onRegenerate ? (
+          {!active && !contentRejected && onRegenerate ? (
             <Button size="small" onClick={onRegenerate}>
               重新生成
             </Button>
@@ -152,7 +153,17 @@ function GenerationProgress({ task, polling, onCancel, onRegenerate }: Generatio
       </div>
 
       {task.status === TaskStatus.FAILED && task.error_message ? (
-        <Alert className="mt-4" type="error" showIcon message={task.error_message} />
+        <Alert
+          className="mt-4"
+          type="error"
+          showIcon
+          message={formatTaskError(task.error_message)}
+          description={
+            contentRejected
+              ? '请修改故事文本或分镜描述后重新创建；该失败不会自动重试。'
+              : undefined
+          }
+        />
       ) : null}
 
       {task.prompt ? (

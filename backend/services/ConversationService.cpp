@@ -40,6 +40,7 @@ json buildBatchItems(const std::string &batchId) {
     }
     for (const auto &task : *tasks) {
         const bool shown = task.status == "completed";
+        const auto errorCode = task.errorCode();
         items.push_back({
             {"task_id", task.id},
             {"panel_index", task.panelIndex.has_value() ? json(*task.panelIndex) : json(nullptr)},
@@ -47,6 +48,7 @@ json buildBatchItems(const std::string &batchId) {
             {"image_id", shown && task.imageId.has_value() ? json(*task.imageId) : json(nullptr)},
             {"image_url", shown && task.resultUrl.has_value() ? json(*task.resultUrl) : json(nullptr)},
             {"error_message", task.errorMessage.has_value() ? json(*task.errorMessage) : json(nullptr)},
+            {"error_code", errorCode.has_value() ? json(*errorCode) : json(nullptr)},
         });
     }
     return items;

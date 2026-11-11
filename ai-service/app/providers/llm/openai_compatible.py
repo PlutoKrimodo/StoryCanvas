@@ -17,6 +17,7 @@ from typing import Dict, List, Optional
 from ...models.schemas import ArtStyle  # noqa: F401  (保留类型引用语义)
 from ...utils.config import settings
 from ...utils.exceptions import LLMProviderException
+from ...services.content_policy import provider_rejection_from_exception
 from ...utils.http_client import describe_http_error, post_json
 from .base import LLMProvider, Message
 
@@ -97,6 +98,10 @@ class OpenAICompatibleProvider(LLMProvider):
                 timeout=settings.LLM_TIMEOUT,
             )
         except Exception as exc:  # httpx / 网络异常统一包装
+            rejection = provider_rejection_from_exception(exc, self.label)
+            if rejection is not None:
+                self.logger.warning("%s 内容策略拒绝，不进入确定性分镜兜底", self.label)
+                raise rejection from exc
             status, reason = describe_http_error(exc)
             # 401/402/403/429 快速失败，避免上层重试造成重复计费
             code = status if status in (401, 402, 403, 429) else 502

@@ -93,3 +93,15 @@ def test_storyboard_enforces_internal_key(client: TestClient, monkeypatch):
     )
     assert allowed.status_code == 200
     assert len(allowed.json()["panels"]) == 1
+
+
+def test_storyboard_rejects_content_policy_violation(client: TestClient):
+    """明显不适合儿童绘本的文本应在调用 LLM 前返回结构化内容拒绝。"""
+    resp = client.post(
+        "/api/v1/analysis/storyboard",
+        json={"text": "这是一段色情内容", "image_count": 1},
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["error_code"] == "CONTENT_REJECTED"
+    assert "内容不适合儿童绘本" in body["message"]

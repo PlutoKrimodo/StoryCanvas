@@ -263,13 +263,15 @@ int GenerationTaskRepository::countCreatedTodayByScope(bool isGuest) {
         // created_at 是 TIMESTAMPTZ，裸 date_trunc('day', now()) 按 UTC 切日，
         // 会出现早上 8 点才重置的偏差，故显式按 Asia/Shanghai 取当日零点。
         // 不按状态过滤：failed 已计费，cancelled 也可能发生在 Ark 调用发出之后。
+        // 例外：内容策略拒绝未调用厂商，使用结构化前缀从每日池中排除。
         // 双项 BYOK 任务不花系统 Key 的钱，也不占用任何每日池。
         auto result = db->execSqlSync(
             "SELECT COUNT(*)::int AS cnt FROM generation_tasks "
             "WHERE created_at >= ("
             "date_trunc('day', now() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai') "
             "AND is_guest = $1 "
-            "AND NOT (byok_llm AND byok_image)",
+            "AND NOT (byok_llm AND byok_image) "
+            "AND COALESCE(error_message, '') NOT LIKE '[CONTENT_REJECTED]%'",
             isGuest);
         return result.empty() ? 0 : result[0]["cnt"].as<int>();
     } catch (const std::exception &e) {

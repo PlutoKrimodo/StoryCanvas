@@ -23,8 +23,13 @@ public:
         return resp;
     }
 
-    static drogon::HttpResponsePtr fail(int code, const std::string &message) {
+    static drogon::HttpResponsePtr fail(int code,
+                                        const std::string &message,
+                                        const std::string &errorCode = "") {
         json body = {{"code", code}, {"message", message}, {"data", nullptr}};
+        if (!errorCode.empty()) {
+            body["error_code"] = errorCode;
+        }
         return ok(body, static_cast<drogon::HttpStatusCode>(code));
     }
 
@@ -52,12 +57,18 @@ public:
         };
     }
 
-    static json error(int code, const std::string &message) {
-        return {
+    static json error(int code,
+                      const std::string &message,
+                      const std::string &errorCode = "") {
+        json body = {
             {"code", code},
             {"message", message},
             {"data", nullptr}
         };
+        if (!errorCode.empty()) {
+            body["error_code"] = errorCode;
+        }
+        return body;
     }
 
     /** 字段级校验失败：errors 为 [{ field, message }] */

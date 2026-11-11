@@ -12,4 +12,6 @@ struct ServiceResult {
     int code = 500;
     std::string message;
     json data;
+    // 结构化业务错误码，例如内容策略拒绝 CONTENT_REJECTED；为空表示普通错误。
+    std::string errorCode;
 };

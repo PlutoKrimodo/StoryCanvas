@@ -42,14 +42,25 @@ bool parseResponse(const drogon::HttpResponsePtr &resp, AiImageResult &out, std:
     }
 
     if (resp->statusCode() != drogon::k200OK) {
+        out.errorCode = body.value("error_code", std::string());
         error = body.value("message", std::string("AI 服务返回错误"));
+        // 不新增数据库列：用结构化前缀把内容拒绝写入 error_message，
+        // GenerationTask::errorCode() 再从该前缀还原出 error_code 给前端。
+        if (out.errorCode == "CONTENT_REJECTED") {
+            error = "[CONTENT_REJECTED] " + error;
+        }
         return false;
     }
 
     try {
+        out.errorCode.clear();
         out.prompt = body.value("prompt", std::string());
         out.negativePrompt = body.value("negative_prompt", std::string());
         out.modelUsed = body.value("model_used", std::string());
+        out.contentReviewStatus =
+            body.value("content_review_status", std::string("approved"));
+        out.contentReviewReason =
+            body.value("content_review_reason", std::string());
         if (body.contains("parsed_data") && !body["parsed_data"].is_null()) {
             out.parsedData = body["parsed_data"];
         }
@@ -308,6 +319,7 @@ bool AiServiceClient::generateStoryboard(const std::string &text,
     }
 
     if (state->response->statusCode() != drogon::k200OK) {
+        out.errorCode = body.value("error_code", std::string());
         std::string message = body.value("message", std::string());
         if (message.empty() && body.contains("detail") && body["detail"].is_string()) {
             message = body["detail"].get<std::string>();
@@ -317,6 +329,7 @@ bool AiServiceClient::generateStoryboard(const std::string &text,
     }
 
     try {
+        out.errorCode.clear();
         out.title = body.value("title", std::string());
         out.consistency = body.value("consistency", json::object());
         out.consistencyPrompt = body.value("consistency_prompt", std::string());

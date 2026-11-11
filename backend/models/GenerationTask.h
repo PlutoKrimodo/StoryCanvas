@@ -48,5 +48,8 @@ struct GenerationTask {
 
     json toJson() const;
 
+    // 内容策略拒绝通过 error_message 的结构化前缀透传，不新增数据库列。
+    std::optional<std::string> errorCode() const;
+
     static GenerationTask fromRow(const drogon::orm::Row &row);
 };

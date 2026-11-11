@@ -99,6 +99,26 @@ describe('GenerationProgress 时间缓动（docs/17 §4.4）', () => {
     expect(screen.getByText('出图服务返回 400 InvalidParameter')).toBeInTheDocument()
   })
 
+  it('内容策略拒绝：不提供重新生成，并去掉内部错误前缀', () => {
+    render(
+      <GenerationProgress
+        task={makeTask({
+          status: TaskStatus.FAILED,
+          error_code: 'CONTENT_REJECTED',
+          error_message: '[CONTENT_REJECTED] 内容不适合儿童绘本：检测到血腥或重度暴力画面。',
+        })}
+        polling={false}
+        onCancel={vi.fn()}
+        onRegenerate={vi.fn()}
+      />,
+    )
+    expect(
+      screen.getByText('内容不适合儿童绘本：检测到血腥或重度暴力画面。'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重新生成' })).not.toBeInTheDocument()
+    expect(screen.getByText(/请修改故事文本或分镜描述后重新创建/)).toBeInTheDocument()
+  })
+
   it('提示词默认两行截断，展开后看全文', () => {
     render(
       <GenerationProgress

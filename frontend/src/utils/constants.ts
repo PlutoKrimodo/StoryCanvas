@@ -49,6 +49,22 @@ export const ART_STYLE_META: Record<
 /** 故事文本长度上限（与后端校验一致） */
 export const STORY_TEXT_MAX_LENGTH = 2000
 
+/** 内容策略拒绝：后端任务与批次视图共用的结构化错误码 */
+export const CONTENT_REJECTED_ERROR_CODE = 'CONTENT_REJECTED'
+const CONTENT_REJECTED_MESSAGE_PREFIX = '[CONTENT_REJECTED] '
+
+export function isContentRejected(errorCode?: string | null): boolean {
+  return errorCode === CONTENT_REJECTED_ERROR_CODE
+}
+
+/** 去掉内部结构化前缀，避免把实现细节直接展示给用户 */
+export function formatTaskError(message?: string | null): string {
+  const text = message ?? ''
+  return text.startsWith(CONTENT_REJECTED_MESSAGE_PREFIX)
+    ? text.slice(CONTENT_REJECTED_MESSAGE_PREFIX.length)
+    : text
+}
+
 /** 生成任务状态文案 */
 export const TASK_STATUS_TEXT: Record<string, string> = {
   pending: '等待中',

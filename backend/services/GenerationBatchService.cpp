@@ -15,10 +15,13 @@
 
 namespace {
 
-ServiceResult fail(int code, const std::string &message) {
+ServiceResult fail(int code,
+                   const std::string &message,
+                   const std::string &errorCode = "") {
     ServiceResult result;
     result.code = code;
     result.message = message;
+    result.errorCode = errorCode;
     return result;
 }
 
@@ -103,6 +106,9 @@ ServiceResult GenerationBatchService::createPlan(const std::string &userId,
     std::string error;
     if (!AiServiceClient::generateStoryboard(
             req.text, imageCount, req.style, llmCredential, storyboard, error)) {
+        if (storyboard.errorCode == "CONTENT_REJECTED") {
+            return fail(422, error, "CONTENT_REJECTED");
+        }
         return fail(502, error);
     }
     if (static_cast<int>(storyboard.panels.size()) != imageCount) {
@@ -420,6 +426,7 @@ json GenerationBatchService::buildView(const GenerationBatch &batch) {
     if (tasks.has_value()) {
         for (const auto &task : *tasks) {
             const bool shown = task.status == "completed";
+            const auto errorCode = task.errorCode();
             items.push_back({
                 {"task_id", task.id},
                 {"panel_index", task.panelIndex.has_value() ? json(*task.panelIndex) : json(nullptr)},
@@ -430,6 +437,7 @@ json GenerationBatchService::buildView(const GenerationBatch &batch) {
                 {"prompt", task.prompt},
                 {"model_used", task.modelUsed.has_value() ? json(*task.modelUsed) : json(nullptr)},
                 {"error_message", task.errorMessage.has_value() ? json(*task.errorMessage) : json(nullptr)},
+                {"error_code", errorCode.has_value() ? json(*errorCode) : json(nullptr)},
             });
         }
     }

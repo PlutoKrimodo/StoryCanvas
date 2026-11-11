@@ -62,7 +62,7 @@ void PageController::savePage(
     if (result.success) {
         callback(sendJson(result.code, ApiResponse::success(result.message, result.data)));
     } else {
-        callback(sendJson(result.code, ApiResponse::error(result.code, result.message)));
+        callback(sendJson(result.code, ApiResponse::error(result.code, result.message, result.errorCode)));
     }
 }
 
@@ -90,7 +90,7 @@ void PageController::saveBatchPages(
     if (result.success) {
         callback(sendJson(result.code, ApiResponse::success(result.message, result.data)));
     } else {
-        callback(sendJson(result.code, ApiResponse::error(result.code, result.message)));
+        callback(sendJson(result.code, ApiResponse::error(result.code, result.message, result.errorCode)));
     }
 }
 
@@ -105,6 +105,6 @@ void PageController::listPages(
     if (result.success) {
         callback(sendJson(result.code, ApiResponse::success(result.message, result.data)));
     } else {
-        callback(sendJson(result.code, ApiResponse::error(result.code, result.message)));
+        callback(sendJson(result.code, ApiResponse::error(result.code, result.message, result.errorCode)));
     }
 }

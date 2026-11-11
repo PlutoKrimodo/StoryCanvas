@@ -215,6 +215,8 @@ class ImageGenerateResponse(BaseModel):
     negative_prompt: str = ""
     parsed_data: Optional[ParsedData] = None
     model_used: str = ""
+    content_review_status: str = "approved"
+    content_review_reason: str = ""
     image: GeneratedImageInfo
 
 
@@ -242,6 +244,8 @@ class ImageGenerationResult(BaseModel):
     # Provider 若直接返回二进制（如 Mock），可通过该字段携带，避免二次下载
     image_bytes: Optional[bytes] = None
     content_type: Optional[str] = None
+    # 厂商返回的内容过滤 / 审核元数据，仅保存结构化字段，不保存完整响应体
+    provider_metadata: Optional[Dict[str, Any]] = None
 
 
 class AnalysisResult(BaseModel):

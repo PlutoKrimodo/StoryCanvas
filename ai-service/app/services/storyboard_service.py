@@ -20,13 +20,14 @@ from ..models.schemas import (
 )
 from ..prompts.storyboard import StoryboardPrompt
 from ..providers.llm.base import LLMProvider
-from ..utils.exceptions import AIServiceException
+from ..utils.exceptions import AIServiceException, CONTENT_REJECTED
+from . import content_policy
 from .base import BaseService
 from .prompt_optimizer import PromptOptimizerService
 from .text_analyzer import TextAnalyzerService
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
-_FAST_FAIL_CODES = (401, 402, 403, 429)
+_FAST_FAIL_CODES = (401, 402, 403, 422, 429)
 
 # 单格文本清洗：格号前缀、句中格号、组级说明、多格触发词
 _PANEL_PREFIX_RE = re.compile(
@@ -96,6 +97,10 @@ class StoryboardService(BaseService):
         image_count: int,
         style: ArtStyle | str,
     ) -> StoryboardResponse:
+        # 输入预检必须在 LLM 调用和确定性兜底之前完成：命中内容策略时
+        # 不调用厂商、不生成分镜，也不允许上层继续创建图像任务。
+        content_policy.assert_allowed(text)
+
         messages = self.prompt_builder.build_prompt(text, image_count, style)
         data: Dict[str, Any] = {}
 
@@ -109,7 +114,9 @@ class StoryboardService(BaseService):
             if isinstance(parsed, dict):
                 data = parsed
         except AIServiceException as exc:
-            if exc.code in _FAST_FAIL_CODES:
+            # 内容拒绝与鉴权/限流类失败都不能走确定性兜底，否则可能把
+            # 已被 LLM 拒绝的文本原样切分后继续送入图像生成。
+            if exc.error_code == CONTENT_REJECTED or exc.code in _FAST_FAIL_CODES:
                 raise
             self.logger.warning("分镜 LLM 调用失败，使用确定性兜底: %s", exc.message)
         except Exception as exc:  # Provider 之外的非预期异常
@@ -128,7 +135,7 @@ class StoryboardService(BaseService):
         if not title:
             title = (text.strip().splitlines()[0] if text.strip() else "新的绘本故事")[:24]
 
-        return StoryboardResponse(
+        response = StoryboardResponse(
             title=title[:120],
             parsed_data=parsed_data,
             consistency=consistency,
@@ -136,6 +143,11 @@ class StoryboardService(BaseService):
             panels=panels,
             negative_prompt=negative[:500],
         )
+        # LLM 可能改写出新的不安全画面；返回前对标题与每格正面描述再检一次。
+        content_policy.assert_allowed(
+            response.title, *[panel.text for panel in response.panels]
+        )
+        return response
 
     # ------------------------------------------------------------------
     # JSON 与字段容错

@@ -43,6 +43,7 @@ export interface BatchItem {
   prompt?: string
   model_used?: string | null
   error_message?: string | null
+  error_code?: string | null
 }
 
 export interface BatchView {

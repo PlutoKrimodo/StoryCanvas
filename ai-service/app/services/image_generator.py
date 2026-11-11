@@ -11,7 +11,8 @@ from typing import Optional, Tuple
 from ..models.schemas import ImageGenerationParams, ImageGenerationResult
 from ..providers.image.base import ImageProvider
 from ..utils.config import settings
-from ..utils.exceptions import ImageProviderException
+from ..utils.exceptions import AIServiceException, CONTENT_REJECTED, ImageProviderException
+from . import content_policy
 from .base import BaseService
 
 
@@ -40,10 +41,16 @@ class ImageGeneratorService(BaseService):
             except asyncio.TimeoutError:
                 last_error = f"图像生成超时（第 {attempt}/{self.max_retries} 次）"
                 self.logger.warning(last_error)
-            except ImageProviderException as exc:
-                if exc.code in (401, 402, 403, 429):
-                    # 用户 Key 无效 / 欠费 / 限流：立即失败，不重试、不重复计费
+            except AIServiceException as exc:
+                # 内容合规拒绝、Key 无效、欠费、限流都属于确定性失败：
+                # 不重试，避免重复计费或把被拒绝的内容继续送到下一轮。
+                if exc.error_code == CONTENT_REJECTED or exc.code in (401, 402, 403, 422, 429):
                     raise
+                rejection = content_policy.provider_rejection(
+                    self.image_provider.name, exc.code, "", exc.message
+                )
+                if rejection is not None:
+                    raise rejection
                 last_error = f"{exc.message}（第 {attempt}/{self.max_retries} 次）"
                 self.logger.warning(last_error)
             except Exception as exc:  # noqa: BLE001 - 统一归集为 Provider 异常

@@ -5,7 +5,7 @@ import pytest
 from app.models.schemas import ImageGenerationParams, ImageGenerationResult
 from app.providers.image.mock_provider import MockImageProvider
 from app.services.image_generator import ImageGeneratorService
-from app.utils.exceptions import ImageProviderException
+from app.utils.exceptions import CONTENT_REJECTED, ContentPolicyException, ImageProviderException
 
 
 @pytest.mark.asyncio
@@ -37,6 +37,28 @@ async def test_generate_retries_then_raises():
     with pytest.raises(ImageProviderException):
         await service.generate(ImageGenerationParams(prompt="x", width=8, height=8))
     assert provider.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_content_policy_rejection_does_not_retry():
+    class RejectingProvider(MockImageProvider):
+        def __init__(self):
+            super().__init__(delay=0)
+            self.calls = 0
+
+        async def generate(self, params):  # type: ignore[override]
+            self.calls += 1
+            raise ContentPolicyException("内容不适合儿童绘本", category="violence_gore")
+
+    provider = RejectingProvider()
+    service = ImageGeneratorService(provider)
+    service.max_retries = 3
+
+    with pytest.raises(ContentPolicyException) as exc:
+        await service.generate(ImageGenerationParams(prompt="x", width=8, height=8))
+
+    assert provider.calls == 1
+    assert exc.value.error_code == CONTENT_REJECTED
 
 
 @pytest.mark.asyncio

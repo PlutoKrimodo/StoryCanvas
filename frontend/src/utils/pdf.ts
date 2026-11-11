@@ -26,6 +26,19 @@ export function buildPdfFilename(bookTitle: string): string {
   return `${safe || 'storycanvas'}.pdf`
 }
 
+/** 生成正文页码，例如“第 2 / 5 页”。 */
+export function buildPageLabel(current: number, total: number): string {
+  const safeTotal = Math.max(1, Math.floor(total))
+  const safeCurrent = Math.min(Math.max(1, Math.floor(current)), safeTotal)
+  return `第 ${safeCurrent} / ${safeTotal} 页`
+}
+
+/** 生成封面副标题，例如“StoryCanvas · 共 5 页”。 */
+export function buildCoverSubtitle(totalPages: number): string {
+  const safeTotal = Math.max(0, Math.floor(totalPages))
+  return `StoryCanvas · 共 ${safeTotal} 页`
+}
+
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -35,6 +48,30 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
+function createPageContainer(width: number, height: number): HTMLDivElement {
+  const container = document.createElement('div')
+  container.style.cssText = `position:fixed;left:-10000px;top:0;width:${width}px;height:${height}px;background:#ffffff;padding:36px;box-sizing:border-box;display:flex;flex-direction:column;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;`
+  return container
+}
+
+function appendHeading(container: HTMLDivElement, title: string, style: string): void {
+  const heading = document.createElement('div')
+  heading.textContent = title
+  heading.style.cssText = style
+  container.appendChild(heading)
+}
+
+function appendFooter(container: HTMLDivElement, footer?: string): void {
+  if (!footer) {
+    return
+  }
+  const footerElement = document.createElement('div')
+  footerElement.textContent = footer
+  footerElement.style.cssText =
+    'font-size:12px;color:#6b7280;text-align:right;margin-top:14px;'
+  container.appendChild(footerElement)
+}
+
 /** 把一页渲染成 canvas（离屏元素，渲染后立即移除）。 */
 async function renderPage(
   render: CanvasRenderer,
@@ -42,23 +79,28 @@ async function renderPage(
   height: number,
   title: string,
   dataUrl?: string,
+  footer?: string,
 ): Promise<HTMLCanvasElement> {
-  const container = document.createElement('div')
-  container.style.cssText = `position:fixed;left:-10000px;top:0;width:${width}px;height:${height}px;background:#ffffff;padding:36px;box-sizing:border-box;display:flex;flex-direction:column;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;`
+  const container = createPageContainer(width, height)
 
-  const heading = document.createElement('div')
-  heading.textContent = title
-  heading.style.cssText =
-    'font-size:30px;font-weight:600;color:#1f2937;text-align:center;margin-bottom:24px;'
-
-  container.appendChild(heading)
+  appendHeading(
+    container,
+    title,
+    'font-size:30px;font-weight:600;color:#1f2937;text-align:center;margin-bottom:24px;',
+  )
 
   if (dataUrl) {
     const img = document.createElement('img')
     img.src = dataUrl
     img.style.cssText = 'flex:1;min-height:0;max-width:100%;object-fit:contain;margin:0 auto;'
     container.appendChild(img)
+  } else {
+    const spacer = document.createElement('div')
+    spacer.style.cssText = 'flex:1;'
+    container.appendChild(spacer)
   }
+
+  appendFooter(container, footer)
 
   document.body.appendChild(container)
   try {
@@ -67,6 +109,49 @@ async function renderPage(
       // decode() 保证图片已解码，避免 canvas 出现空白
       await img?.decode?.().catch(() => undefined)
     }
+    return await render(container, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: true,
+    })
+  } finally {
+    container.remove()
+  }
+}
+
+/** 渲染封面页：绘本标题 + 总页数。 */
+async function renderCoverPage(
+  render: CanvasRenderer,
+  width: number,
+  height: number,
+  bookTitle: string,
+  totalPages: number,
+): Promise<HTMLCanvasElement> {
+  const container = createPageContainer(width, height)
+  container.style.justifyContent = 'center'
+  container.style.alignItems = 'center'
+
+  const brand = document.createElement('div')
+  brand.textContent = 'StoryCanvas'
+  brand.style.cssText =
+    'font-size:16px;letter-spacing:0.18em;color:#9a6a4f;margin-bottom:22px;'
+
+  const title = document.createElement('div')
+  title.textContent = bookTitle || 'StoryCanvas'
+  title.style.cssText =
+    'font-size:42px;font-weight:700;color:#1f2937;text-align:center;line-height:1.35;max-width:90%;'
+
+  const subtitle = document.createElement('div')
+  subtitle.textContent = buildCoverSubtitle(totalPages)
+  subtitle.style.cssText = 'font-size:18px;color:#6b7280;text-align:center;margin-top:24px;'
+
+  container.appendChild(brand)
+  container.appendChild(title)
+  container.appendChild(subtitle)
+
+  document.body.appendChild(container)
+  try {
     return await render(container, {
       scale: 2,
       backgroundColor: '#ffffff',
@@ -105,11 +190,18 @@ export async function exportBookToPdf(bookTitle: string, pages: BookPage[]): Pro
 
   const ordered = [...pages].sort((a, b) => a.page_number - b.page_number)
 
+  const coverCanvas = await renderCoverPage(
+    html2canvas as unknown as CanvasRenderer,
+    pageWidth,
+    pageHeight,
+    bookTitle,
+    ordered.length,
+  )
+  pdf.addImage(coverCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWidth, pageHeight)
+
   for (let index = 0; index < ordered.length; index += 1) {
     const page = ordered[index]
-    if (index > 0) {
-      pdf.addPage()
-    }
+    pdf.addPage()
 
     let dataUrl: string | undefined
     if (page.image_id) {
@@ -123,6 +215,7 @@ export async function exportBookToPdf(bookTitle: string, pages: BookPage[]): Pro
       pageHeight,
       page.title || `第 ${page.page_number} 页`,
       dataUrl,
+      buildPageLabel(index + 1, ordered.length),
     )
     pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWidth, pageHeight)
   }

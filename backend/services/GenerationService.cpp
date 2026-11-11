@@ -345,6 +345,12 @@ void GenerationService::processTask(const std::string &taskId) {
                            ? task.originalText
                            : std::optional<std::string>(aiResult.prompt);
     image.parameters = task.parameters;
+    if (!image.parameters.is_object()) {
+        image.parameters = json::object();
+    }
+    image.parameters["content_review_status"] =
+        aiResult.contentReviewStatus.empty() ? "approved" : aiResult.contentReviewStatus;
+    image.parameters["content_review_reason"] = aiResult.contentReviewReason;
 
     if (!GeneratedImageRepository::create(image)) {
         task.status = "failed";

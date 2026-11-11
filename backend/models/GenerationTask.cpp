@@ -2,6 +2,20 @@
 
 #include "RowUtils.h"
 
+namespace {
+constexpr const char *kContentRejectedPrefix = "[CONTENT_REJECTED] ";
+}
+
+std::optional<std::string> GenerationTask::errorCode() const {
+    if (!errorMessage.has_value()) {
+        return std::nullopt;
+    }
+    if (errorMessage->rfind(kContentRejectedPrefix, 0) == 0) {
+        return std::string("CONTENT_REJECTED");
+    }
+    return std::nullopt;
+}
+
 json GenerationTask::toJson() const {
     // result 仅在存在生成图时返回（与 docs/04 §8.2 契约一致）
     json result = nullptr;
@@ -25,6 +39,7 @@ json GenerationTask::toJson() const {
         {"parsed_data", parsedData.has_value() ? *parsedData : json(nullptr)},
         {"result", result},
         {"error_message", rowutil::toJsonValue(errorMessage)},
+        {"error_code", rowutil::toJsonValue(errorCode())},
         {"model_used", rowutil::toJsonValue(modelUsed)},
         {"byok_llm", byokLlm},
         {"byok_image", byokImage},

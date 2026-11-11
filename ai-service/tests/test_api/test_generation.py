@@ -20,6 +20,8 @@ def test_generate_image_and_persist(client: TestClient, storage_root):
     assert body["status"] == "success"
     assert body["prompt"]
     assert body["parsed_data"] is not None
+    assert body["content_review_status"] == "approved"
+    assert "输入策略通过" in body["content_review_reason"]
 
     image = body["image"]
     assert image["file_path"].startswith("users/u-1/books/b-1/images/generated/")
@@ -107,3 +109,15 @@ def test_generate_rejects_oversize_image_with_readable_reason(client: TestClient
     # （上限被测试压到 1000 字节，验证 B/KB 级格式化不出现 "0.0MB > 0MB"）
     assert "大小上限" in body["message"]
     assert "1000B" in body["message"]
+
+
+def test_generate_rejects_content_policy_violation(client: TestClient):
+    """用户编辑单格描述后命中高风险内容时，必须在出图前拒绝。"""
+    resp = client.post(
+        "/api/v1/images/generate",
+        json={"text": "画面出现血腥和肢解", "parameters": {"size": "1024x1024"}},
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["error_code"] == "CONTENT_REJECTED"
+    assert "内容不适合儿童绘本" in body["message"]

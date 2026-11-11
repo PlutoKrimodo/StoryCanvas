@@ -83,6 +83,7 @@ export interface TaskResult {
   parsed_data?: ParsedData | null
   result?: GenerationResultImage | null
   error_message?: string | null
+  error_code?: string | null
   model_used?: string | null
   /** 任务创建时是否使用用户自带 Key（BYOK 快照） */
   byok_llm?: boolean

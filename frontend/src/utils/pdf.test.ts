@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildPdfFilename } from './pdf'
+import { buildCoverSubtitle, buildPageLabel, buildPdfFilename } from './pdf'
 
 describe('pdf 工具', () => {
   it('默认文件名为 storycanvas.pdf', () => {
@@ -17,5 +17,21 @@ describe('pdf 工具', () => {
 
   it('去掉首尾空白后为空时回退默认名', () => {
     expect(buildPdfFilename('   ')).toBe('storycanvas.pdf')
+  })
+
+  it('生成连续页码', () => {
+    expect(buildPageLabel(1, 3)).toBe('第 1 / 3 页')
+    expect(buildPageLabel(2, 3)).toBe('第 2 / 3 页')
+    expect(buildPageLabel(3, 3)).toBe('第 3 / 3 页')
+  })
+
+  it('页码越界时收敛到有效范围', () => {
+    expect(buildPageLabel(0, 3)).toBe('第 1 / 3 页')
+    expect(buildPageLabel(4, 3)).toBe('第 3 / 3 页')
+  })
+
+  it('封面副标题显示总页数', () => {
+    expect(buildCoverSubtitle(3)).toBe('StoryCanvas · 共 3 页')
+    expect(buildCoverSubtitle(0)).toBe('StoryCanvas · 共 0 页')
   })
 })

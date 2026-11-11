@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 from ...models.schemas import ArtStyle  # noqa: F401  (保留类型引用语义)
 from ...utils.config import settings
 from ...utils.exceptions import LLMProviderException
+from ...services.content_policy import provider_rejection_from_exception
 from ...utils.http_client import post_json
 from .base import LLMProvider, Message
 
@@ -66,8 +67,12 @@ class DeepSeekProvider(LLMProvider):
                 timeout=settings.LLM_TIMEOUT,
             )
         except Exception as exc:  # httpx / 网络异常统一包装
-            self.logger.error("DeepSeek 调用失败: %s", exc)
-            raise LLMProviderException(f"DeepSeek 调用失败: {exc}", 502) from exc
+            rejection = provider_rejection_from_exception(exc, "DeepSeek")
+            if rejection is not None:
+                self.logger.warning("DeepSeek 内容策略拒绝，不进入确定性分镜兜底")
+                raise rejection from exc
+            self.logger.error("DeepSeek 调用失败: %s", type(exc).__name__)
+            raise LLMProviderException("DeepSeek 调用失败，请检查网络或配置", 502) from exc
 
         try:
             return data["choices"][0]["message"]["content"]

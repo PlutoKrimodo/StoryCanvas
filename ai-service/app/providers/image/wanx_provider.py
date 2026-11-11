@@ -14,6 +14,7 @@ from typing import Dict, Optional
 from ...models.schemas import ImageGenerationParams, ImageGenerationResult
 from ...utils.config import settings
 from ...utils.exceptions import ImageProviderException
+from ...services.content_policy import provider_rejection
 from ...utils.http_client import describe_http_error, get_json, post_json
 from .base import ImageProvider
 
@@ -45,13 +46,14 @@ class WanxProvider(ImageProvider):
             raise ImageProviderException("DASHSCOPE_API_KEY 未配置，无法调用通义万相", 503)
 
         task_id = await self._submit(params)
-        url = await self._poll(task_id)
+        url, provider_metadata = await self._poll(task_id)
         return ImageGenerationResult(
             image_url=url,
             width=params.width,
             height=params.height,
             seed=params.seed,
             finish_reason="success",
+            provider_metadata=provider_metadata,
         )
 
     async def _submit(self, params: ImageGenerationParams) -> str:
@@ -88,7 +90,9 @@ class WanxProvider(ImageProvider):
             raise ImageProviderException(f"通义万相未返回 task_id: {data}", 502)
         return str(task_id)
 
-    async def _poll(self, task_id: str) -> str:
+    async def _poll(
+        self, task_id: str
+    ) -> tuple[str, Optional[Dict[str, object]]]:
         deadline = time.monotonic() + _TASK_TOTAL_TIMEOUT
         while time.monotonic() < deadline:
             try:
@@ -113,11 +117,24 @@ class WanxProvider(ImageProvider):
             if status == "SUCCEEDED":
                 results = output.get("results") or []
                 if results and results[0].get("url"):
-                    return str(results[0]["url"])
+                    metadata: Dict[str, object] = {}
+                    if isinstance(output, dict):
+                        for key in ("content_filter_results", "content_filter"):
+                            if output.get(key) is not None:
+                                metadata[key] = output[key]
+                    return str(results[0]["url"]), metadata or None
                 raise ImageProviderException(f"通义万相成功但无图片: {data}", 502)
             if status == "FAILED":
+                rejection = provider_rejection(
+                    "wanx",
+                    422,
+                    str(output.get("code", "")),
+                    str(output.get("message", "")),
+                )
+                if rejection is not None:
+                    raise rejection
                 raise ImageProviderException(
-                    f"通义万相生成失败: {output.get('message', data)}", 502
+                    f"通义万相生成失败: {output.get('message', '未提供原因')}", 502
                 )
             await asyncio.sleep(_POLL_INTERVAL)
 

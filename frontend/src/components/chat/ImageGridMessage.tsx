@@ -11,6 +11,7 @@ import {
 import ArtImage from '../common/ArtImage'
 import ImageLightbox from './ImageLightbox'
 import type { BatchItem } from '../../types/conversation'
+import { formatTaskError, isContentRejected } from '../../utils/constants'
 
 const { Text } = Typography
 
@@ -84,6 +85,7 @@ function ImageGridMessage({
           const index = item.panel_index ?? 0
           const running = item.status === 'pending' || item.status === 'processing'
           const hasImage = Boolean(item.image_url && item.image_id)
+          const contentRejected = isContentRejected(item.error_code)
           const alt = `第 ${index + 1} 格`
 
           return (
@@ -145,7 +147,12 @@ function ImageGridMessage({
                     type="error"
                     showIcon
                     className="mb-2"
-                    message={item.error_message}
+                    message={formatTaskError(item.error_message)}
+                    description={
+                      contentRejected
+                        ? '请修改该格描述后重新创建分镜；该失败不会自动重试。'
+                        : undefined
+                    }
                   />
                 ) : null}
                 <div className="flex flex-wrap items-center gap-1">
@@ -165,15 +172,17 @@ function ImageGridMessage({
                   >
                     加入绘本
                   </Button>
-                  <Button
-                    size="small"
-                    type="link"
-                    icon={<ReloadOutlined />}
-                    disabled={running}
-                    onClick={() => onRegenerate(index, batchId)}
-                  >
-                    重画
-                  </Button>
+                  {!contentRejected ? (
+                    <Button
+                      size="small"
+                      type="link"
+                      icon={<ReloadOutlined />}
+                      disabled={running}
+                      onClick={() => onRegenerate(index, batchId)}
+                    >
+                      重画
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </div>

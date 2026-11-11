@@ -17,6 +17,9 @@ struct AiImageResult {
     std::string negativePrompt;
     json parsedData = json(nullptr);
     std::string modelUsed;
+    std::string errorCode;
+    std::string contentReviewStatus = "approved";
+    std::string contentReviewReason;
 };
 
 /** 分镜规划结果（LLM 一次调用产出）。 */
@@ -32,6 +35,7 @@ struct AiStoryboardResult {
     std::string consistencyPrompt;
     std::string negativePrompt;
     std::vector<AiStoryboardPanel> panels;
+    std::string errorCode;
 };
 
 /** 凭据测试结果（AI 服务已把厂商错误归一为可读 message）。 */
